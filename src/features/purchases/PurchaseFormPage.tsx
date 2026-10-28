@@ -14,19 +14,22 @@ import { Select } from '@/components/ui/Select'
 import { EmptyState, PageLoader } from '@/components/ui/misc'
 import { useToast } from '@/components/ui/toast'
 import { useBranches, useProducts, useSuppliers, useTaxes } from '@/hooks/core'
-import { usePayableForSource } from '@/hooks/payables'
 import {
+  purchaseStatusInfo,
   useCancelPurchase,
   usePurchase,
+  usePurchaseReceipts,
   useReceivePurchase,
   useSavePurchase,
   type PurchaseDetail,
+  type PurchaseLine,
+  type PurchaseReceiptsData,
   type SavePurchaseInput,
 } from '@/hooks/purchases'
 import { errorMessage } from '@/lib/errors'
 import { fmtDate, fmtDateShort, fmtDateTime, money } from '@/lib/format'
-import { DOCUMENT_STATUS, newClientUid, PURCHASE_STATUS } from '@/lib/labels'
-import type { PaymentMethod, Product } from '@/types/erp'
+import { DOCUMENT_STATUS, newClientUid } from '@/lib/labels'
+import type { Payable, PaymentMethod, Product } from '@/types/erp'
 import { parseAmount, PaymentFields, round2, todayIso } from '@/features/receivables/paymentShared'
 import { AttachmentField } from './AttachmentField'
 import { ProductPicker } from './ProductPicker'
@@ -122,15 +125,16 @@ function PurchaseForm() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const toast = useToast()
-  const { tenant, can } = useAuth()
+  const { tenant, can, hasModule } = useAuth()
   const currency = tenant?.currency ?? 'DOP'
+  const canSeePayables = can('payables.manage') && hasModule('payables')
 
   const detail = usePurchase(id)
   const suppliers = useSuppliers()
   const branches = useBranches()
   const products = useProducts()
   const taxes = useTaxes()
-  const payable = usePayableForSource('purchase', detail.data?.purchase.status === 'received' ? id : undefined)
+  const receipts = usePurchaseReceipts(id)
   const save = useSavePurchase()
 
   const [header, setHeader] = useState<Header>(emptyHeader)
@@ -147,7 +151,12 @@ function PurchaseForm() {
 
   const purchase = detail.data?.purchase
   const status = purchase?.status ?? 'draft'
-  const editable = !purchase || status === 'draft' || status === 'ordered'
+  // Con mercancía ya recibida la compra queda congelada: la base no deja
+  // reemplazar líneas recibidas (trigger de 0023) ni cancelarla.
+  const anyReceived = (detail.data?.items ?? []).some((it) => it.received_qty > 0)
+  const inProgress = !purchase || status === 'draft' || status === 'ordered'
+  const editable = inProgress && !anyReceived
+  const statusInfo = purchaseStatusInfo(status, anyReceived)
 
   const current = serialize(header, lines)
   const dirty = !id || current !== snapshot
@@ -299,7 +308,7 @@ function PurchaseForm() {
             ? `Creada el ${fmtDate(purchase.created_at)}${purchase.received_at ? ` · recibida el ${fmtDateTime(purchase.received_at)}` : ''}`
             : 'Carga la factura del proveedor. Guárdala como borrador u orden y recíbela cuando llegue la mercancía.'
         }
-        action={purchase && <Badge tone={PURCHASE_STATUS[status].tone}>{PURCHASE_STATUS[status].label}</Badge>}
+        action={purchase && <Badge tone={statusInfo.tone}>{statusInfo.label}</Badge>}
       />
 
       {status === 'canceled' && purchase?.canceled_reason && (
@@ -308,34 +317,22 @@ function PurchaseForm() {
         </div>
       )}
 
-      {status === 'received' && (
-        <Card className="mb-4">
-          <CardBody className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            {payable.isLoading ? (
-              <p className="text-sm text-slate-500">Buscando la cuenta por pagar…</p>
-            ) : payable.data ? (
-              <div className="text-sm">
-                <p className="font-medium text-slate-800">
-                  Cuenta por pagar: {money(round2(payable.data.amount - payable.data.paid_amount), currency)} pendiente
-                  <Badge tone={DOCUMENT_STATUS[payable.data.status].tone} className="ml-2">
-                    {DOCUMENT_STATUS[payable.data.status].label}
-                  </Badge>
-                </p>
-                <p className="text-slate-500">
-                  Total {money(payable.data.amount, currency)} · pagado {money(payable.data.paid_amount, currency)} · vence{' '}
-                  {fmtDateShort(payable.data.due_date)}
-                </p>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-500">Esta compra no generó deuda.</p>
-            )}
-            {payable.data && (
-              <Link to="/cuentas-por-pagar" className="text-sm font-medium text-brand-600 hover:underline">
-                Ver en cuentas por pagar →
-              </Link>
-            )}
-          </CardBody>
-        </Card>
+      {inProgress && anyReceived && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Recepción parcial: ya entró parte de la mercancía. La compra no se puede editar ni cancelar; recibe lo que falta
+          cuando llegue.
+        </div>
+      )}
+
+      {purchase && (
+        <ReceiptsCard
+          loading={receipts.isLoading}
+          error={receipts.isError ? errorMessage(receipts.error, 'No se pudieron cargar las recepciones.') : null}
+          onRetry={() => void receipts.refetch()}
+          data={receipts.data}
+          currency={currency}
+          canSeePayables={canSeePayables}
+        />
       )}
 
       <form onSubmit={(e) => void submit(status === 'ordered' ? 'ordered' : 'draft', e)} className="space-y-4">
@@ -518,7 +515,7 @@ function PurchaseForm() {
               })}
             </ul>
           ) : (
-            <ReadOnlyLines detail={detail.data!} currency={currency} />
+            <ReadOnlyLines detail={detail.data!} currency={currency} showReceived={status !== 'draft' && status !== 'canceled'} />
           )}
         </Card>
 
@@ -552,34 +549,36 @@ function PurchaseForm() {
 
         {formError && <p className="text-sm font-medium text-red-600">{formError}</p>}
 
-        {editable && (
+        {inProgress && (
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-            {purchase && (
+            {purchase && editable && (
               <Button type="button" variant="ghost" onClick={() => setCancelOpen(true)}>
                 <Ban className="h-4 w-4" /> Cancelar compra
               </Button>
             )}
-            {status === 'draft' && (
+            {editable && status === 'draft' && (
               <Button type="button" variant="outline" loading={save.isPending} onClick={() => void submit('draft')}>
                 <Save className="h-4 w-4" /> Guardar borrador
               </Button>
             )}
-            <Button
-              type="button"
-              variant={purchase ? 'outline' : 'primary'}
-              loading={save.isPending}
-              onClick={() => void submit('ordered')}
-            >
-              <Send className="h-4 w-4" /> {status === 'ordered' ? 'Guardar orden' : 'Guardar como orden'}
-            </Button>
+            {editable && (
+              <Button
+                type="button"
+                variant={purchase ? 'outline' : 'primary'}
+                loading={save.isPending}
+                onClick={() => void submit('ordered')}
+              >
+                <Send className="h-4 w-4" /> {status === 'ordered' ? 'Guardar orden' : 'Guardar como orden'}
+              </Button>
+            )}
             {purchase && (
               <Button
                 type="button"
                 onClick={() => setReceiveOpen(true)}
-                disabled={dirty}
-                title={dirty ? 'Guarda los cambios antes de recibir' : undefined}
+                disabled={editable && dirty}
+                title={editable && dirty ? 'Guarda los cambios antes de recibir' : undefined}
               >
-                <PackageCheck className="h-4 w-4" /> Recibir mercancía
+                <PackageCheck className="h-4 w-4" /> {anyReceived ? 'Recibir lo pendiente' : 'Recibir mercancía'}
               </Button>
             )}
           </div>
@@ -597,11 +596,11 @@ function PurchaseForm() {
         show="cost"
         currency={currency}
       />
-      {purchase && receiveOpen && (
+      {purchase && receiveOpen && detail.data && (
         <ReceiveModal
           purchaseId={purchase.id}
           number={purchase.number}
-          total={purchase.total}
+          items={detail.data.items}
           canPay={can('payables.manage')}
           currency={currency}
           onClose={() => setReceiveOpen(false)}
@@ -614,7 +613,29 @@ function PurchaseForm() {
   )
 }
 
-function ReadOnlyLines({ detail, currency }: { detail: PurchaseDetail; currency: string }) {
+/** Cantidad con hasta 3 decimales (numeric(14,3) en la base). */
+const qty = (n: number) => n.toLocaleString('es-DO', { maximumFractionDigits: 3 })
+
+/** Recibido / pendiente de una línea: verde si llegó todo, ámbar si falta. */
+function ReceivedCell({ it }: { it: PurchaseLine }) {
+  const pending = round3(it.quantity - it.received_qty)
+  return (
+    <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
+      <span className="tabular-nums">{qty(it.received_qty)}</span>
+      {pending > 0 ? <Badge tone="amber">Faltan {qty(pending)}</Badge> : <Badge tone="green">Completo</Badge>}
+    </span>
+  )
+}
+
+function ReadOnlyLines({
+  detail,
+  currency,
+  showReceived,
+}: {
+  detail: PurchaseDetail
+  currency: string
+  showReceived: boolean
+}) {
   const pct = (r: number) => `${Math.round(r * 10000) / 100}%`
   return (
     <>
@@ -624,6 +645,7 @@ function ReadOnlyLines({ detail, currency }: { detail: PurchaseDetail; currency:
             <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
               <th className="px-4 py-3 font-medium">Producto</th>
               <th className="px-4 py-3 text-right font-medium">Cantidad</th>
+              {showReceived && <th className="px-4 py-3 text-right font-medium">Recibido</th>}
               <th className="px-4 py-3 text-right font-medium">Costo</th>
               <th className="px-4 py-3 text-right font-medium">Descuento</th>
               <th className="px-4 py-3 text-right font-medium">ITBIS</th>
@@ -634,7 +656,12 @@ function ReadOnlyLines({ detail, currency }: { detail: PurchaseDetail; currency:
             {detail.items.map((it) => (
               <tr key={it.id}>
                 <td className="px-4 py-3 text-slate-800">{it.description}</td>
-                <td className="px-4 py-3 text-right tabular-nums">{it.quantity}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{qty(it.quantity)}</td>
+                {showReceived && (
+                  <td className="px-4 py-3 text-right">
+                    <ReceivedCell it={it} />
+                  </td>
+                )}
                 <td className="px-4 py-3 text-right tabular-nums">{money(it.unit_cost, currency)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{it.discount ? money(it.discount, currency) : '—'}</td>
                 <td className="px-4 py-3 text-right tabular-nums">
@@ -648,7 +675,12 @@ function ReadOnlyLines({ detail, currency }: { detail: PurchaseDetail; currency:
       </div>
       <DataList>
         {detail.items.map((it) => (
-          <DataRow key={it.id} title={it.description} titleExtra={`${it.quantity} × ${money(it.unit_cost, currency)}`}>
+          <DataRow
+            key={it.id}
+            title={it.description}
+            titleExtra={`${qty(it.quantity)} × ${money(it.unit_cost, currency)}`}
+            badges={showReceived ? <ReceivedCell it={it} /> : undefined}
+          >
             <DataFields cols={3}>
               <DataField label="Descuento">{it.discount ? money(it.discount, currency) : '—'}</DataField>
               <DataField label="ITBIS">{money(it.tax_amount, currency)}</DataField>
@@ -661,22 +693,143 @@ function ReadOnlyLines({ detail, currency }: { detail: PurchaseDetail; currency:
   )
 }
 
+const round3 = (n: number) => Math.round(n * 1000) / 1000
+
 /**
- * Confirmación de recepción, con pago opcional en el acto. Un client_uid por
+ * Valor (con ITBIS) de recibir `q` de una línea, con la MISMA regla que
+ * receive_purchase(): proporcional a lo pedido y, si con esto se completa la
+ * línea, la última entrega se lleva el residuo del redondeo. Es una
+ * estimación para la pantalla; el valor que vale lo devuelve la base.
+ */
+function receiveValue(it: PurchaseLine, q: number): number {
+  if (!(q > 0) || !(it.quantity > 0)) return 0
+  if (round3(it.received_qty + q) === round3(it.quantity)) {
+    return round2(it.total - round2((it.total * it.received_qty) / it.quantity))
+  }
+  return round2((it.total * q) / it.quantity)
+}
+
+function PayableLine({ payable, currency }: { payable: Payable; currency: string }) {
+  const pending = round2(payable.amount - payable.paid_amount)
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <Badge tone={DOCUMENT_STATUS[payable.status].tone}>{DOCUMENT_STATUS[payable.status].label}</Badge>
+      <span className="text-slate-500">
+        {pending > 0 ? `Pendiente ${money(pending, currency)} · vence ${fmtDateShort(payable.due_date)}` : 'Pagada'}
+      </span>
+    </span>
+  )
+}
+
+/**
+ * Historial de recepciones (RE-…) con la cuenta por pagar que creó cada una.
+ * Una compra recibida antes de existir las recepciones tiene su deuda sin
+ * recepción: se enseña aparte como "recepción anterior".
+ */
+function ReceiptsCard({
+  loading,
+  error,
+  onRetry,
+  data,
+  currency,
+  canSeePayables,
+}: {
+  loading: boolean
+  error: string | null
+  onRetry: () => void
+  data: PurchaseReceiptsData | undefined
+  currency: string
+  canSeePayables: boolean
+}) {
+  if (loading) {
+    return (
+      <Card className="mb-4">
+        <CardBody>
+          <p className="text-sm text-slate-500">Buscando recepciones…</p>
+        </CardBody>
+      </Card>
+    )
+  }
+  if (error) {
+    return (
+      <Card className="mb-4">
+        <CardBody className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-red-600">{error}</p>
+          <Button size="sm" variant="outline" onClick={onRetry}>
+            Reintentar
+          </Button>
+        </CardBody>
+      </Card>
+    )
+  }
+  const rows = [
+    ...(data?.legacyPayables ?? []).map((p) => ({
+      id: p.id,
+      number: 'Recepción anterior',
+      total: p.amount,
+      created_at: p.created_at,
+      payable: p as Payable | null,
+    })),
+    ...(data?.receipts ?? []),
+  ]
+  if (rows.length === 0) return null
+  const received = round2(rows.reduce((s, r) => s + r.total, 0))
+  return (
+    <Card className="mb-4">
+      <CardHeader
+        title="Recepciones"
+        subtitle={`${rows.length} recepción(es) · ${money(received, currency)} recibido con ITBIS. Cada una genera su propia cuenta por pagar.`}
+        action={
+          canSeePayables ? (
+            <Link to="/cuentas-por-pagar" className="text-sm font-medium text-brand-600 hover:underline">
+              Cuentas por pagar →
+            </Link>
+          ) : undefined
+        }
+      />
+      <ul className="divide-y divide-slate-100">
+        {rows.map((r) => (
+          <li key={r.id} className="flex flex-col gap-1 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+            <div className="min-w-0">
+              <p className="font-medium text-slate-800">
+                {r.number} <span className="font-normal text-slate-500">· {fmtDateTime(r.created_at)}</span>
+              </p>
+              {r.payable ? (
+                canSeePayables ? (
+                  <Link to="/cuentas-por-pagar" className="hover:underline" title="Ver en cuentas por pagar">
+                    <PayableLine payable={r.payable} currency={currency} />
+                  </Link>
+                ) : (
+                  <PayableLine payable={r.payable} currency={currency} />
+                )
+              ) : (
+                <p className="text-slate-500">Sin cuenta por pagar</p>
+              )}
+            </div>
+            <p className="shrink-0 font-semibold tabular-nums text-slate-900">{money(r.total, currency)}</p>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+}
+
+/**
+ * Recepción (total o parcial) con pago opcional en el acto. Un client_uid por
  * apertura: si la red se cae después de que la base confirmó, reintentar no
- * paga dos veces (y la compra ya recibida rechaza una segunda recepción).
+ * paga dos veces. Las cantidades por defecto son lo pendiente de cada línea.
  */
 function ReceiveModal({
   purchaseId,
   number,
-  total,
+  items,
   canPay,
   currency,
   onClose,
 }: {
   purchaseId: string
   number: string
-  total: number
+  items: PurchaseLine[]
   canPay: boolean
   currency: string
   onClose: () => void
@@ -684,20 +837,46 @@ function ReceiveModal({
   const toast = useToast()
   const receive = useReceivePurchase()
   const [uid] = useState(newClientUid)
+  const pendingLines = useMemo(() => items.filter((it) => round3(it.quantity - it.received_qty) > 0), [items])
+  const [qtys, setQtys] = useState<Record<string, string>>(() =>
+    Object.fromEntries(pendingLines.map((it) => [it.id, String(round3(it.quantity - it.received_qty))])),
+  )
   const [payNow, setPayNow] = useState(false)
-  const [amount, setAmount] = useState(String(total))
+  const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [registerId, setRegisterId] = useState('')
   const [reference, setReference] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  const parsed = pendingLines.map((it) => {
+    const raw = (qtys[it.id] ?? '').trim()
+    const q = raw === '' ? 0 : parseAmount(raw)
+    const pending = round3(it.quantity - it.received_qty)
+    const valid = Number.isFinite(q) && q >= 0 && round3(q) <= pending
+    return { it, q: valid ? round3(q) : 0, pending, valid }
+  })
+  const estimate = round2(parsed.reduce((s, l) => s + receiveValue(l.it, l.q), 0))
+  const toReceive = parsed.filter((l) => l.q > 0)
+  const completes = toReceive.length > 0 && parsed.every((l) => l.q === l.pending) && pendingLines.length > 0
+
+  const setAll = (mode: 'pending' | 'none') =>
+    setQtys(
+      Object.fromEntries(
+        pendingLines.map((it) => [it.id, mode === 'pending' ? String(round3(it.quantity - it.received_qty)) : '']),
+      ),
+    )
+
   const confirm = async () => {
     setError(null)
+    const bad = parsed.find((l) => !l.valid)
+    if (bad) return setError(`Cantidad inválida en "${bad.it.description}": faltan ${qty(bad.pending)} por recibir`)
+    if (toReceive.length === 0) return setError('Indica qué cantidad llegó de al menos un producto')
     let payment = null
     if (payNow) {
       const value = round2(parseAmount(amount))
       if (!Number.isFinite(value) || value <= 0) return setError('Escribe un monto mayor que cero')
-      if (value > total) return setError(`El pago no puede pasar de ${money(total, currency)}`)
+      // Cortesía: la base vuelve a comprobarlo contra el valor que ella calcula.
+      if (value > estimate) return setError(`El pago no puede pasar del valor recibido (${money(estimate, currency)})`)
       payment = {
         client_uid: uid,
         amount: value,
@@ -707,8 +886,16 @@ function ReceiveModal({
       }
     }
     try {
-      await receive.mutateAsync({ id: purchaseId, payment })
-      toast.success(`Compra ${number} recibida: el inventario ya se actualizó`)
+      const r = await receive.mutateAsync({
+        id: purchaseId,
+        payment,
+        lines: toReceive.map((l) => ({ purchase_item_id: l.it.id, quantity: l.q })),
+      })
+      toast.success(
+        r.completed
+          ? `Compra ${number} recibida completa (${r.receipt_number} · ${money(r.value, currency)})`
+          : `Recepción ${r.receipt_number} registrada por ${money(r.value, currency)}: aún falta mercancía`,
+      )
       onClose()
     } catch (err) {
       toast.error(errorMessage(err))
@@ -719,53 +906,104 @@ function ReceiveModal({
     <Modal
       open
       onClose={onClose}
+      size="lg"
       title={`Recibir compra ${number}`}
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={() => void confirm()} loading={receive.isPending}>
-            <PackageCheck className="h-4 w-4" /> Confirmar recepción
+          <Button onClick={() => void confirm()} loading={receive.isPending} disabled={pendingLines.length === 0}>
+            <PackageCheck className="h-4 w-4" /> {completes ? 'Recibir todo' : 'Registrar recepción'}
           </Button>
         </>
       }
     >
-      <div className="space-y-4">
-        <p className="text-sm text-slate-600">
-          Entrará la mercancía a inventario, se actualizará el costo de cada producto y se creará una cuenta por pagar
-          de <b>{money(total, currency)}</b>. Después de recibirla ya no se puede editar.
-        </p>
-        {canPay && total > 0 && (
-          <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-slate-300"
-              checked={payNow}
-              onChange={(e) => setPayNow(e.target.checked)}
-            />
-            Pagar ahora (total o parcial)
-          </label>
-        )}
-        {payNow && (
-          <div className="space-y-4 rounded-xl border border-slate-100 p-4">
-            <Field label="Monto pagado" required>
-              <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            </Field>
-            <PaymentFields
-              method={method}
-              onMethod={setMethod}
-              registerId={registerId}
-              onRegister={setRegisterId}
-              cashRegister="optional"
-            />
-            <Field label="Referencia">
-              <Input value={reference} onChange={(e) => setReference(e.target.value)} maxLength={80} />
-            </Field>
+      {pendingLines.length === 0 ? (
+        <p className="text-sm text-slate-600">No queda nada pendiente por recibir en esta compra.</p>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Indica lo que llegó hoy. Entra a inventario, se actualiza el costo de cada producto y se crea una cuenta por
+            pagar por el valor recibido. Lo que falte queda pendiente para otra recepción.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => setAll('pending')}>
+              Todo lo pendiente
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setAll('none')}>
+              Vaciar
+            </Button>
           </div>
-        )}
-        {error && <p className="text-sm font-medium text-red-600">{error}</p>}
-      </div>
+          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+            {parsed.map(({ it, q, pending, valid }) => (
+              <li key={it.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
+                <div className="min-w-0 flex-1 basis-44">
+                  <p className="text-sm font-medium text-slate-800">{it.description}</p>
+                  <p className="text-xs text-slate-500">
+                    Pedido {qty(it.quantity)} · recibido {qty(it.received_qty)} · <b className="text-slate-700">faltan {qty(pending)}</b>
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-28">
+                    <Input
+                      inputMode="decimal"
+                      value={qtys[it.id] ?? ''}
+                      placeholder="0"
+                      aria-label={`Recibir ahora de ${it.description}`}
+                      aria-invalid={!valid}
+                      className={valid ? 'text-right tabular-nums' : 'border-red-400 text-right tabular-nums'}
+                      onChange={(e) => setQtys((m) => ({ ...m, [it.id]: e.target.value }))}
+                    />
+                  </div>
+                  <span className="w-24 text-right text-sm tabular-nums text-slate-600">
+                    {money(receiveValue(it, q), currency)}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-baseline justify-between rounded-xl bg-slate-50 px-4 py-3">
+            <span className="text-sm text-slate-600">
+              Valor a recibir (con ITBIS)
+              <span className="block text-xs text-slate-400">Estimado: el valor final lo calcula el sistema.</span>
+            </span>
+            <span className="text-lg font-bold tabular-nums text-slate-900">{money(estimate, currency)}</span>
+          </div>
+          {canPay && estimate > 0 && (
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300"
+                checked={payNow}
+                onChange={(e) => {
+                  setPayNow(e.target.checked)
+                  if (e.target.checked && !amount) setAmount(String(estimate))
+                }}
+              />
+              Pagar ahora esta recepción (total o parcial)
+            </label>
+          )}
+          {payNow && (
+            <div className="space-y-4 rounded-xl border border-slate-100 p-4">
+              <Field label="Monto pagado" required hint={`Hasta ${money(estimate, currency)}, el valor de esta recepción.`}>
+                <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              </Field>
+              <PaymentFields
+                method={method}
+                onMethod={setMethod}
+                registerId={registerId}
+                onRegister={setRegisterId}
+                cashRegister="optional"
+              />
+              <Field label="Referencia">
+                <Input value={reference} onChange={(e) => setReference(e.target.value)} maxLength={80} />
+              </Field>
+            </div>
+          )}
+          {error && <p className="text-sm font-medium text-red-600">{error}</p>}
+        </div>
+      )}
     </Modal>
   )
 }

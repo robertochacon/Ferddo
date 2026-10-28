@@ -61,6 +61,7 @@ import {
   type SalePaymentPayload,
 } from '@/hooks/pos'
 import { useSaleDetailFetcher } from '@/hooks/sales'
+import { customerPriceListId, useListPrices } from '@/hooks/priceLists'
 import { cn } from '@/lib/cn'
 import { errorMessage } from '@/lib/errors'
 import { money, num } from '@/lib/format'
@@ -104,7 +105,11 @@ interface CartLine {
   name: string
   unit: string
   quantity: number
-  /** Precio que se cobra. Si no se cambió a mano, se sigue el del catálogo. */
+  /**
+   * Precio que se cobra. Si no se cambió a mano, se sigue el precio base
+   * vigente: el de la lista del cliente si el producto está en ella, si no el
+   * del catálogo (y cambia solo al cambiar de cliente).
+   */
   unit_price: number
   price_overridden: boolean
   /** Descuento en dinero de la línea. */
@@ -494,6 +499,17 @@ function PosWorkspace({ cartScope, register }: { cartScope: string; register: Ca
     }
   }, [location.state, location.pathname, navigate])
   const quotation = useQuotationForPos(quotationToLoad)
+
+  // ── Precio base: lista de precios del cliente o catálogo ──
+  // Mientras se carga una cotización manda SU cliente: así sus líneas se
+  // comparan con el precio que la base aplicará a ese cliente.
+  const pricingCustomerId = quotationToLoad ? (quotation.data?.quotation.customer_id ?? null) : cart.customerId
+  const pricingCustomer = pricingCustomerId ? (customers.data?.find((c) => c.id === pricingCustomerId) ?? null) : null
+  const listPrices = useListPrices(customerPriceListId(pricingCustomer))
+  const basePrice = useCallback(
+    (p: Product) => listPrices.prices?.get(p.id) ?? Number(p.price),
+    [listPrices.prices],
+  )
   useEffect(() => {
     if (!quotationToLoad) return
     if (quotation.isError) {
@@ -503,6 +519,9 @@ function PosWorkspace({ cartScope, register }: { cartScope: string; register: Ca
     }
     if (!quotation.data || !products.data) return
     const { quotation: q, items } = quotation.data
+    // Se espera a saber la lista del cliente: comparar contra el catálogo
+    // marcaría como "precio cambiado" cada línea cotizada a precio de lista.
+    if (q.customer_id && (customers.isLoading || listPrices.isLoading)) return
     setQuotationToLoad(null)
     if (!['draft', 'sent', 'accepted'].includes(q.status)) {
       toast.error(`La cotización ${q.number} ya no se puede convertir (${q.status === 'converted' ? 'ya fue convertida' : 'no está vigente'}).`)
@@ -517,7 +536,7 @@ function PosWorkspace({ cartScope, register }: { cartScope: string; register: Ca
         skipped++
         continue
       }
-      const current = Number(p.price)
+      const current = basePrice(p)
       // Sin permiso para cambiar precios, se cobra el precio vigente: mandar el
       // cotizado haría que la base rechace la venta con FORBIDDEN.
       const useQuoted = canOverride && it.unit_price !== current
@@ -547,7 +566,20 @@ function PosWorkspace({ cartScope, register }: { cartScope: string; register: Ca
     if (!canDiscount && (q.global_discount > 0 || items.some((i) => i.line_discount > 0))) {
       toast.info('La cotización tenía descuentos y tu rol no puede aplicarlos: se quitaron.')
     }
-  }, [quotationToLoad, quotation.data, quotation.isError, quotation.error, products.data, productMap, canOverride, canDiscount, toast])
+  }, [
+    quotationToLoad,
+    quotation.data,
+    quotation.isError,
+    quotation.error,
+    products.data,
+    productMap,
+    canOverride,
+    canDiscount,
+    toast,
+    customers.isLoading,
+    listPrices.isLoading,
+    basePrice,
+  ])
 
   // ── Cálculo de la vista previa ──
   const pricedInputs = cart.lines.map((l) => {
@@ -556,8 +588,9 @@ function PosWorkspace({ cartScope, register }: { cartScope: string; register: Ca
       line: l,
       product: p,
       quantity: l.quantity,
-      // Sin cambio manual se sigue el precio del catálogo (por si cambió).
-      unit_price: l.price_overridden || !p ? l.unit_price : Number(p.price),
+      // Sin cambio manual se sigue el precio base vigente (lista del cliente o
+      // catálogo): cambiar de cliente reprecia estas líneas y no las demás.
+      unit_price: l.price_overridden || !p ? l.unit_price : basePrice(p),
       discount: l.discount,
       tax_rate: p?.tax_id ? (taxRate.get(p.tax_id) ?? 0) : 0,
     }
@@ -598,7 +631,7 @@ function PosWorkspace({ cartScope, register }: { cartScope: string; register: Ca
   const loadServerTotals = () => {
     setServerTotals(null)
     preview.mutate(
-      { items: itemsPayload, globalDiscount: cart.globalDiscount },
+      { items: itemsPayload, globalDiscount: cart.globalDiscount, customerId: cart.customerId },
       { onSuccess: (t) => setServerTotals(t) },
     )
   }
@@ -736,6 +769,8 @@ function PosWorkspace({ cartScope, register }: { cartScope: string; register: Ca
       ecfError={ecfError}
       canDiscount={canDiscount}
       canOverride={canOverride}
+      listPrices={listPrices.prices}
+      listName={listPrices.prices ? (listPrices.list?.name ?? null) : null}
       stockMap={showStock ? stockMap : null}
       onPatch={patchCart}
       onUpdateLine={updateLine}
@@ -855,6 +890,7 @@ function PosWorkspace({ cartScope, register }: { cartScope: string; register: Ca
                   <ProductTile
                     key={p.id}
                     product={p}
+                    price={basePrice(p)}
                     currency={currency}
                     stock={showStock && p.track_stock ? (stockMap[p.id] ?? 0) : null}
                     inCart={qtyInCart.get(p.id) ?? 0}
@@ -978,12 +1014,15 @@ const STOCK_TONE = {
 
 function ProductTile({
   product,
+  price,
   currency,
   stock,
   inCart,
   onAdd,
 }: {
   product: Product
+  /** Precio base para el cliente elegido (lista o catálogo). */
+  price: number
   currency: string
   /** null = no se controla existencia. */
   stock: number | null
@@ -1011,7 +1050,7 @@ function ProductTile({
         {productLabel(product)}
       </span>
       <span className="mt-2 flex items-end justify-between gap-1">
-        <span className="text-base font-bold tabular-nums text-slate-900">{money(product.price, currency)}</span>
+        <span className="text-base font-bold tabular-nums text-slate-900">{money(price, currency)}</span>
         {stock != null && (
           <span className={cn('text-xs tabular-nums', STOCK_TONE[level])}>
             {level === 'out' ? 'Agotado' : `${fmtQty(stock)} ${product.unit}`}
@@ -1050,6 +1089,8 @@ function CartPanel({
   ecfError,
   canDiscount,
   canOverride,
+  listPrices,
+  listName,
   stockMap,
   onPatch,
   onUpdateLine,
@@ -1074,6 +1115,9 @@ function CartPanel({
   ecfError?: string
   canDiscount: boolean
   canOverride: boolean
+  /** Precios de la lista del cliente (null = sin lista activa: todo a catálogo). */
+  listPrices: Map<string, number> | null
+  listName: string | null
   stockMap: Record<string, number> | null
   onPatch: (patch: Partial<CartState>) => void
   onUpdateLine: (key: string, patch: Partial<CartLine>) => void
@@ -1103,7 +1147,11 @@ function CartPanel({
             </span>
             <span className="block truncate text-xs text-slate-500">
               {customer
-                ? [customer.doc_number, customerBalance > 0 ? `Debe ${m(customerBalance)}` : null]
+                ? [
+                    customer.doc_number,
+                    listName ? `Lista ${listName}` : null,
+                    customerBalance > 0 ? `Debe ${m(customerBalance)}` : null,
+                  ]
                     .filter(Boolean)
                     .join(' · ') || 'Cambiar cliente'
                 : 'Toca para elegir un cliente'}
@@ -1136,6 +1184,9 @@ function CartPanel({
               const p = pl.input.product
               const stock = stockMap && p?.track_stock ? (stockMap[l.product_id] ?? 0) : null
               const isEditing = editing === l.key
+              const listPrice = p ? listPrices?.get(p.id) : undefined
+              // Precio contra el que se mide un cambio manual: el mismo que usa la base.
+              const base = listPrice ?? (p ? Number(p.price) : l.unit_price)
               return (
                 <li key={l.key} className="px-4 py-3">
                   <div className="flex items-start gap-2">
@@ -1144,6 +1195,9 @@ function CartPanel({
                       <p className="text-xs text-slate-500">
                         {m(pl.input.unit_price)} / {l.unit}
                         {l.price_overridden && <span className="ml-1 text-amber-600">(precio cambiado)</span>}
+                        {!l.price_overridden && listPrice !== undefined && (
+                          <span className="ml-1 text-brand-600">(precio de lista)</span>
+                        )}
                         {pl.discount > 0 && <span className="ml-1 text-emerald-600">−{m(pl.discount)}</span>}
                       </p>
                       {stock != null && l.quantity > stock && (
@@ -1205,9 +1259,8 @@ function CartPanel({
                             value={pl.input.unit_price}
                             decimals={2}
                             onCommit={(n) => {
-                              const catalog = p ? Number(p.price) : l.unit_price
                               if (n < 0) return
-                              onUpdateLine(l.key, { unit_price: n, price_overridden: n !== catalog })
+                              onUpdateLine(l.key, { unit_price: n, price_overridden: n !== base })
                             }}
                           />
                         </Field>
@@ -1225,9 +1278,9 @@ function CartPanel({
                         <button
                           type="button"
                           className="col-span-2 text-left text-xs font-medium text-brand-700 underline"
-                          onClick={() => onUpdateLine(l.key, { unit_price: Number(p.price), price_overridden: false })}
+                          onClick={() => onUpdateLine(l.key, { unit_price: base, price_overridden: false })}
                         >
-                          Volver al precio de catálogo ({m(Number(p.price))})
+                          Volver al precio de {listPrice !== undefined ? 'lista' : 'catálogo'} ({m(base)})
                         </button>
                       )}
                     </div>

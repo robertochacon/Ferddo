@@ -5,6 +5,9 @@ import {
   Banknote,
   Boxes,
   Building2,
+  ChefHat,
+  UtensilsCrossed,
+  Wrench,
   Check,
   ChevronDown,
   FileSpreadsheet,
@@ -74,6 +77,14 @@ const NAV: NavGroup[] = [
     items: [
       { to: '/', label: 'Inicio', icon: LayoutDashboard, end: true },
       { to: '/pos', label: 'Vender', icon: ShoppingCart, modules: ['pos'], perm: 'sales.create' },
+    ],
+  },
+  {
+    label: 'Restaurante y taller',
+    items: [
+      { to: '/mesas', label: 'Mesas y cuentas', icon: UtensilsCrossed, modules: ['restaurant'], perm: 'restaurant.orders' },
+      { to: '/cocina', label: 'Cocina', icon: ChefHat, modules: ['restaurant'], perm: 'restaurant.kitchen' },
+      { to: '/taller', label: 'Órdenes de trabajo', icon: Wrench, modules: ['workshop'], perm: 'workshop.manage' },
     ],
   },
   {

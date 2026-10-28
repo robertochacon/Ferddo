@@ -106,6 +106,18 @@ const QuotationFormPage = lazyWithRetry(() =>
 const InvoicingPage = lazyWithRetry(() =>
   import('@/features/invoicing/InvoicingPage').then((m) => ({ default: m.InvoicingPage })),
 )
+const RestaurantPage = lazyWithRetry(() =>
+  import('@/features/restaurant/RestaurantPage').then((m) => ({ default: m.RestaurantPage })),
+)
+const KitchenPage = lazyWithRetry(() =>
+  import('@/features/restaurant/KitchenPage').then((m) => ({ default: m.KitchenPage })),
+)
+const WorkOrdersPage = lazyWithRetry(() =>
+  import('@/features/workshop/WorkOrdersPage').then((m) => ({ default: m.WorkOrdersPage })),
+)
+const WorkOrderDetailPage = lazyWithRetry(() =>
+  import('@/features/workshop/WorkOrderDetailPage').then((m) => ({ default: m.WorkOrderDetailPage })),
+)
 const ReportsPage = lazyWithRetry(() =>
   import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })),
 )
@@ -304,6 +316,11 @@ export default function App() {
             <Route path="cotizaciones/:id" element={<QuotationFormPage />} />
             <Route path="facturacion" element={<InvoicingPage />} />
             <Route path="reportes" element={<ReportsPage />} />
+            <Route path="mesas" element={<RestaurantPage />} />
+            <Route path="cocina" element={<KitchenPage />} />
+            <Route path="taller" element={<WorkOrdersPage />} />
+            <Route path="taller/nueva" element={<WorkOrderDetailPage />} />
+            <Route path="taller/:id" element={<WorkOrderDetailPage />} />
             <Route path="configuracion" element={<SettingsPage />} />
             <Route path="perfil" element={<ProfilePage />} />
           </Route>

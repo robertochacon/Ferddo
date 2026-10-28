@@ -5,6 +5,8 @@ import type { MemberRole, ModuleCode } from '@/types/db'
 import type {
   CashMovementKind,
   DocumentStatus,
+  KitchenStatus,
+  WorkOrderStatus,
   EcfStatus,
   ExpenseStatus,
   InventoryMovementKind,
@@ -65,6 +67,7 @@ export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   credit: 'Crédito',
   credit_note: 'Nota de crédito',
   other: 'Otro',
+  advance: 'Anticipo',
 }
 
 export const SALE_STATUS: Record<SaleStatus, { label: string; tone: Tone }> = {
@@ -113,6 +116,26 @@ export const QUOTATION_STATUS: Record<QuotationStatus, { label: string; tone: To
   converted: { label: 'Convertida', tone: 'green' },
 }
 
+export const KITCHEN_STATUS: Record<KitchenStatus, { label: string; tone: Tone }> = {
+  pending: { label: 'Sin enviar', tone: 'slate' },
+  sent: { label: 'En cocina', tone: 'amber' },
+  preparing: { label: 'Preparando', tone: 'brand' },
+  ready: { label: 'Listo', tone: 'green' },
+  served: { label: 'Servido', tone: 'slate' },
+  canceled: { label: 'Anulado', tone: 'red' },
+}
+
+export const WORK_ORDER_STATUS: Record<WorkOrderStatus, { label: string; tone: Tone }> = {
+  received: { label: 'Recibida', tone: 'slate' },
+  diagnosing: { label: 'En revisión', tone: 'brand' },
+  quoted: { label: 'Cotizada', tone: 'amber' },
+  approved: { label: 'Aprobada', tone: 'green' },
+  in_progress: { label: 'En proceso', tone: 'brand' },
+  done: { label: 'Terminada', tone: 'green' },
+  delivered: { label: 'Entregada', tone: 'slate' },
+  canceled: { label: 'Cancelada', tone: 'red' },
+}
+
 export const INVENTORY_KIND_LABEL: Record<InventoryMovementKind, string> = {
   initial: 'Existencia inicial',
   purchase: 'Compra',
@@ -135,6 +158,7 @@ export const CASH_KIND_LABEL: Record<CashMovementKind, string> = {
   receivable_payment: 'Cobro a cliente',
   payable_payment: 'Pago a proveedor',
   expense: 'Gasto',
+  advance: 'Anticipo (orden de trabajo)',
 }
 
 /** Provincias de República Dominicana (para los selects de dirección). */

@@ -285,6 +285,32 @@ begin
                                                  'amount', 755.20, 'method', 'transfer'));
   perform pg_temp.ok((select status from payables where source_id = v_pur) = 'paid', 'cuenta por pagar saldada');
 
+  -- ── Recepción parcial ────────────────────────────────────────────────────
+  v_pur := public.save_purchase(jsonb_build_object('branch_id', v_branch, 'supplier_id', v_sup, 'status', 'ordered',
+           'items', jsonb_build_array(jsonb_build_object('product_id', p1, 'quantity', 10, 'unit_cost', 80))));
+  v_num := (select quantity from stock_levels where product_id = p1);
+  r := public.receive_purchase(v_pur, null, jsonb_build_array(jsonb_build_object(
+         'purchase_item_id', (select id from purchase_items where purchase_id = v_pur), 'quantity', 4)));
+  perform pg_temp.ok(not (r ->> 'completed')::boolean and (select status from purchases where id = v_pur) = 'ordered',
+                     'recepción parcial deja la compra abierta');
+  perform pg_temp.ok((r ->> 'value')::numeric = 377.60, 'valor recibido 4 × 80 × 1.18 = 377.60');
+  perform pg_temp.ok((select quantity from stock_levels where product_id = p1) = v_num + 4, 'entra solo lo recibido');
+  perform pg_temp.expect_error(format('select public.cancel_purchase(%L, ''x'')', v_pur), 'ya tiene mercancía');
+  r := public.receive_purchase(v_pur);
+  perform pg_temp.ok((r ->> 'completed')::boolean and (r ->> 'value')::numeric = 566.40, 'segunda entrega completa la compra (resto 566.40)');
+  perform pg_temp.ok((select sum(amount) from payables where source_id = v_pur) = 944.00, 'cuentas por pagar suman el total de la compra');
+
+  -- ── Lista de precios ─────────────────────────────────────────────────────
+  insert into price_lists (tenant_id, name) values (ta, 'Mayoristas') returning id into v_q;
+  insert into price_list_items (tenant_id, price_list_id, product_id, price) values (ta, v_q, p1, 100);
+  insert into customers (tenant_id, name, price_list_id) values (ta, 'Colmado vecino', v_q) returning id into v_cust_rnc;
+  perform pg_temp.ok((public.preview_totals(jsonb_build_array(jsonb_build_object('product_id', p1, 'quantity', 2)), 0, v_cust_rnc)
+                      ->> 'total')::numeric = 200, 'vista previa con precio de lista');
+  r := public.create_sale(jsonb_build_object('client_uid', gen_random_uuid(), 'register_id', v_reg, 'customer_id', v_cust_rnc,
+       'items', jsonb_build_array(jsonb_build_object('product_id', p1, 'quantity', 2)),
+       'payments', jsonb_build_array(jsonb_build_object('method', 'transfer', 'amount', 200))));
+  perform pg_temp.ok((r ->> 'total')::numeric = 200, 'la venta usa el precio de lista del cliente');
+
   -- ── Cotización → venta ───────────────────────────────────────────────────
   -- El colmado no trae cotizaciones por defecto: el dueño activa el módulo.
   update tenants set modules = modules || array['quotations'] where id = ta;
@@ -323,10 +349,10 @@ begin
 
   -- ── Tablero y reportes ───────────────────────────────────────────────────
   r := public.dashboard_summary();
-  perform pg_temp.ok((r ->> 'count_today')::int = 4, 'ventas no anuladas de hoy (4: anulada fuera): ' || (r ->> 'count_today'));
+  perform pg_temp.ok((r ->> 'count_today')::int = 5, 'ventas no anuladas de hoy (5: anulada fuera): ' || (r ->> 'count_today'));
   perform pg_temp.ok(jsonb_array_length(public.report_sales(current_date - 1, current_date + 1, 'product')) >= 1, 'reporte por producto');
   r := public.report_taxes(current_date - 1, current_date + 1);
-  perform pg_temp.ok((r ->> 'itbis_purchases')::numeric = 115.20, 'ITBIS pagado en compras');
+  perform pg_temp.ok((r ->> 'itbis_purchases')::numeric = 259.20, 'ITBIS pagado en compras (115.20 + 144.00)');
 
   -- ── Límites de plan y suscripción ────────────────────────────────────────
   perform pg_temp.act_as(null);

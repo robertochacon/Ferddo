@@ -2,14 +2,31 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/lib/storage'
 import { useAuth } from '@/auth/AuthProvider'
-import type { PaymentMethod, Purchase, PurchaseItem, PurchaseStatus } from '@/types/erp'
+import { PURCHASE_STATUS, type Tone } from '@/lib/labels'
+import type { Payable, PaymentMethod, Purchase, PurchaseItem, PurchaseStatus } from '@/types/erp'
 
 /*
  * Compras en dos pasos: save_purchase() guarda borrador u orden (la base
  * recalcula importes línea a línea) y receive_purchase() mete la mercancía,
- * recalcula el costo promedio y crea la cuenta por pagar, una sola vez y bajo
- * candado. El cliente nunca manda totales: solo productos, cantidades y costos.
+ * recalcula el costo promedio y crea la cuenta por pagar, bajo candado. El
+ * cliente nunca manda totales: solo productos, cantidades y costos.
+ *
+ * Recepción parcial (0023): cada llamada a receive_purchase() es una
+ * RECEPCIÓN (purchase_receipts, número RE-…) con su propia entrada de
+ * inventario y su propia cuenta por pagar por el valor recibido. La compra
+ * sigue 'ordered' hasta que llega todo; con algo recibido ya no se edita ni se
+ * cancela (lo impide la base).
  */
+
+/** `purchase_items.received_qty` llegó en 0023; `PurchaseItem` (types/erp.ts) aún no lo declara. */
+export type PurchaseLine = PurchaseItem & { received_qty: number }
+
+/** "Recepción parcial" no es un estado de la base: es 'ordered' con algo ya recibido. */
+export const PARTIAL_RECEIPT_STATUS: { label: string; tone: Tone } = { label: 'Recepción parcial', tone: 'amber' }
+
+export function purchaseStatusInfo(status: PurchaseStatus, partiallyReceived: boolean): { label: string; tone: Tone } {
+  return status === 'ordered' && partiallyReceived ? PARTIAL_RECEIPT_STATUS : PURCHASE_STATUS[status]
+}
 
 const toPurchase = (p: Purchase): Purchase => ({
   ...p,
@@ -19,11 +36,16 @@ const toPurchase = (p: Purchase): Purchase => ({
   total: Number(p.total),
 })
 
+export type PurchaseListRow = Purchase & {
+  /** 'ordered' con al menos una recepción: ya entró parte de la mercancía. */
+  partially_received: boolean
+}
+
 /** Compras cuya fecha de orden cae en el rango (inclusive), la más reciente primero. */
 export function usePurchases(from: string, to: string) {
   return useQuery({
     queryKey: ['purchases', 'list', from, to],
-    queryFn: async (): Promise<Purchase[]> => {
+    queryFn: async (): Promise<PurchaseListRow[]> => {
       const { data, error } = await supabase
         .from('purchases')
         .select('*')
@@ -33,7 +55,21 @@ export function usePurchases(from: string, to: string) {
         .order('seq', { ascending: false })
         .limit(1000)
       if (error) throw error
-      return ((data ?? []) as Purchase[]).map(toPurchase)
+      const rows = ((data ?? []) as Purchase[]).map(toPurchase)
+      // Solo las 'ordered' pueden estar a medias. Tener una recepción equivale
+      // a tener algo recibido: receive_purchase() revierte la recepción entera
+      // si no entra ninguna línea. En tandas para no pasar del largo de URL.
+      const ordered = rows.filter((p) => p.status === 'ordered').map((p) => p.id)
+      const partial = new Set<string>()
+      for (let i = 0; i < ordered.length; i += 100) {
+        const { data: rc, error: rcError } = await supabase
+          .from('purchase_receipts')
+          .select('purchase_id')
+          .in('purchase_id', ordered.slice(i, i + 100))
+        if (rcError) throw rcError
+        for (const r of (rc ?? []) as { purchase_id: string }[]) partial.add(r.purchase_id)
+      }
+      return rows.map((p) => ({ ...p, partially_received: partial.has(p.id) }))
     },
   })
 }
@@ -58,7 +94,7 @@ export function useSupplierPurchases(supplierId: string | undefined) {
 
 export interface PurchaseDetail {
   purchase: Purchase
-  items: PurchaseItem[]
+  items: PurchaseLine[]
 }
 
 export function usePurchase(id: string | undefined) {
@@ -77,9 +113,10 @@ export function usePurchase(id: string | undefined) {
       if (itemsError) throw itemsError
       return {
         purchase: toPurchase(data as Purchase),
-        items: ((items ?? []) as PurchaseItem[]).map((it) => ({
+        items: ((items ?? []) as PurchaseLine[]).map((it) => ({
           ...it,
           quantity: Number(it.quantity),
+          received_qty: Number(it.received_qty ?? 0),
           unit_cost: Number(it.unit_cost),
           discount: Number(it.discount),
           tax_rate: Number(it.tax_rate),
@@ -124,7 +161,10 @@ export function useSavePurchase() {
 
 export interface ReceivePurchaseInput {
   id: string
-  /** Pago en el acto (opcional). Sin él, la compra queda entera en cuentas por pagar. */
+  /**
+   * Pago en el acto (opcional), aplicado a la cuenta por pagar de ESTA
+   * recepción: no puede pasar del valor recibido. Sin él, todo queda a deber.
+   */
   payment?: {
     client_uid: string
     amount: number
@@ -132,24 +172,49 @@ export interface ReceivePurchaseInput {
     register_id?: string | null
     reference?: string | null
   } | null
+  /** Cantidades a recibir por línea. null = todo lo pendiente. */
+  lines?: { purchase_item_id: string; quantity: number }[] | null
+}
+
+export interface ReceivePurchaseResult {
+  purchase_id: string
+  receipt_id: string
+  receipt_number: string
+  /** Valor recibido con ITBIS, calculado por la base: el que vale. */
+  value: number
+  payable_id: string | null
+  payment_id: string | null
+  /** true = ya llegó todo y la compra pasó a 'received'. */
+  completed: boolean
 }
 
 export function useReceivePurchase() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, payment }: ReceivePurchaseInput) => {
+    mutationFn: async ({ id, payment, lines }: ReceivePurchaseInput): Promise<ReceivePurchaseResult> => {
       const { data, error } = await supabase.rpc('receive_purchase', {
         p_id: id,
         p_payment: payment ?? null,
+        p_lines: lines ?? null,
       })
       if (error) throw error
-      return data as { purchase_id: string; payable_id: string | null; payment_id: string | null }
+      const r = (data ?? {}) as Record<string, unknown>
+      return {
+        purchase_id: String(r.purchase_id),
+        receipt_id: String(r.receipt_id),
+        receipt_number: String(r.receipt_number ?? ''),
+        value: Number(r.value ?? 0),
+        payable_id: (r.payable_id as string | null) ?? null,
+        payment_id: (r.payment_id as string | null) ?? null,
+        completed: Boolean(r.completed),
+      }
     },
     onSuccess: (_res, { id }) => {
       // Recibir mueve existencias, costos (productos), la deuda y, si se pagó
       // en efectivo, la caja.
       for (const key of [
         ['purchases'],
+        // Incluye ['purchase', id, 'receipts'].
         ['purchase', id],
         ['payables'],
         ['supplier-balances'],
@@ -162,6 +227,60 @@ export function useReceivePurchase() {
       ]) {
         qc.invalidateQueries({ queryKey: key })
       }
+    },
+  })
+}
+
+export interface PurchaseReceipt {
+  id: string
+  purchase_id: string
+  number: string
+  total: number
+  payable_id: string | null
+  created_by: string | null
+  created_at: string
+  /** Su cuenta por pagar; null si la recepción valió 0 o no se pudo leer. */
+  payable: Payable | null
+}
+
+export interface PurchaseReceiptsData {
+  receipts: PurchaseReceipt[]
+  /**
+   * Cuentas por pagar de la compra que no cuelgan de ninguna recepción: las de
+   * compras recibidas antes de 0023, cuando se recibía todo de una vez y no
+   * existía purchase_receipts. Sin esto su deuda desaparecería de la ficha.
+   */
+  legacyPayables: Payable[]
+}
+
+const toPayable = (p: Payable): Payable => ({ ...p, amount: Number(p.amount), paid_amount: Number(p.paid_amount) })
+
+/** Recepciones de una compra (la más antigua primero) con sus cuentas por pagar. */
+export function usePurchaseReceipts(purchaseId: string | undefined) {
+  return useQuery({
+    queryKey: ['purchase', purchaseId, 'receipts'],
+    enabled: Boolean(purchaseId),
+    queryFn: async (): Promise<PurchaseReceiptsData> => {
+      const [rcRes, pyRes] = await Promise.all([
+        supabase.from('purchase_receipts').select('*').eq('purchase_id', purchaseId!).order('created_at'),
+        supabase
+          .from('payables')
+          .select('*')
+          .eq('source_type', 'purchase')
+          .eq('source_id', purchaseId!)
+          .order('created_at'),
+      ])
+      if (rcRes.error) throw rcRes.error
+      if (pyRes.error) throw pyRes.error
+      const payables = ((pyRes.data ?? []) as Payable[]).map(toPayable)
+      const byId = new Map(payables.map((p) => [p.id, p]))
+      const receipts = ((rcRes.data ?? []) as Omit<PurchaseReceipt, 'payable'>[]).map((r) => ({
+        ...r,
+        total: Number(r.total),
+        payable: r.payable_id ? (byId.get(r.payable_id) ?? null) : null,
+      }))
+      const linked = new Set(receipts.map((r) => r.payable_id).filter(Boolean))
+      return { receipts, legacyPayables: payables.filter((p) => !linked.has(p.id)) }
     },
   })
 }

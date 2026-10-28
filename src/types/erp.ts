@@ -9,7 +9,8 @@
 import type { MemberRole, ModuleCode } from '@/types/db'
 
 export type ProductKind = 'product' | 'service'
-export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'credit' | 'credit_note' | 'other'
+/** 'advance' = anticipo de una orden de trabajo aplicado al facturarla. */
+export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'credit' | 'credit_note' | 'other' | 'advance'
 export type SaleStatus = 'completed' | 'voided' | 'partially_returned' | 'returned'
 export type CashSessionStatus = 'open' | 'closed'
 export type CashMovementKind =
@@ -21,6 +22,7 @@ export type CashMovementKind =
   | 'receivable_payment'
   | 'payable_payment'
   | 'expense'
+  | 'advance'
 export type InventoryMovementKind =
   | 'initial'
   | 'purchase'
@@ -316,6 +318,8 @@ export interface Sale {
   change_due: number
   credit_amount: number
   returned_total: number
+  /** 10 % de ley (restaurantes): fuera de las líneas, sin ITBIS, dentro de `total`. */
+  service_charge: number
   ecf_type: string | null
   notes: string | null
   created_by: string | null
@@ -684,4 +688,153 @@ export interface PlanUsage {
   branches: number
   registers: number
   ecf_month: number
+}
+
+// ── Restaurante (fase 8, migración 0022) ───────────────────────────────────
+export type RestaurantOrderStatus = 'open' | 'closed' | 'canceled'
+export type KitchenStatus = 'pending' | 'sent' | 'preparing' | 'ready' | 'served' | 'canceled'
+
+export interface RestaurantArea {
+  id: string
+  tenant_id: string
+  branch_id: string
+  name: string
+  sort_order: number
+  is_active: boolean
+}
+
+export interface RestaurantTable {
+  id: string
+  tenant_id: string
+  branch_id: string
+  area_id: string | null
+  name: string
+  seats: number
+  sort_order: number
+  is_active: boolean
+}
+
+export interface RestaurantOrder {
+  id: string
+  tenant_id: string
+  branch_id: string
+  table_id: string | null
+  number: string
+  label: string | null
+  status: RestaurantOrderStatus
+  guests: number
+  waiter_id: string | null
+  customer_id: string | null
+  notes: string | null
+  opened_at: string
+  closed_at: string | null
+  cancel_reason: string | null
+}
+
+export interface RestaurantOrderItem {
+  id: string
+  tenant_id: string
+  order_id: string
+  product_id: string
+  quantity: number
+  notes: string | null
+  kitchen_status: KitchenStatus
+  ticket_id: string | null
+  billed_sale_id: string | null
+  cancel_reason: string | null
+  created_by: string | null
+  created_at: string
+  sent_at: string | null
+  ready_at: string | null
+  served_at: string | null
+}
+
+export interface KitchenTicket {
+  id: string
+  tenant_id: string
+  order_id: string
+  number: string
+  created_by: string | null
+  created_at: string
+}
+
+// ── Taller ──────────────────────────────────────────────────────────────────
+export type WorkOrderStatus =
+  | 'received'
+  | 'diagnosing'
+  | 'quoted'
+  | 'approved'
+  | 'in_progress'
+  | 'done'
+  | 'delivered'
+  | 'canceled'
+
+export interface Asset {
+  id: string
+  tenant_id: string
+  customer_id: string
+  kind: 'vehicle' | 'equipment'
+  brand: string | null
+  model: string | null
+  year: number | null
+  plate: string | null
+  serial: string | null
+  color: string | null
+  notes: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkOrder {
+  id: string
+  tenant_id: string
+  branch_id: string
+  seq: number
+  number: string
+  customer_id: string
+  asset_id: string | null
+  status: WorkOrderStatus
+  problem: string
+  diagnosis: string | null
+  notes: string | null
+  mileage_in: number | null
+  technician_id: string | null
+  promised_at: string | null
+  quotation_id: string | null
+  sale_id: string | null
+  received_at: string
+  done_at: string | null
+  delivered_at: string | null
+  cancel_reason: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkOrderItem {
+  id: string
+  tenant_id: string
+  order_id: string
+  line_no: number
+  product_id: string
+  quantity: number
+  notes: string | null
+}
+
+export interface WorkOrderAdvance {
+  id: string
+  tenant_id: string
+  order_id: string
+  number: string
+  amount: number
+  method: PaymentMethod
+  session_id: string | null
+  reference: string | null
+  applied_sale_id: string | null
+  /** Devuelto al cliente (0024): ya no cuenta como disponible. */
+  refunded_at: string | null
+  refund_reason: string | null
+  created_by: string | null
+  created_at: string
 }

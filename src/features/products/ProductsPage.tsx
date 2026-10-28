@@ -5,6 +5,7 @@ import {
   Download,
   History,
   ImageOff,
+  ListOrdered,
   Package,
   Pencil,
   Plus,
@@ -37,6 +38,7 @@ import type { Product } from '@/types/erp'
 import { ProductFormModal } from './ProductFormModal'
 import { CategoriesModal } from './CategoriesModal'
 import { ImportProductsModal } from './ImportProductsModal'
+import { PriceListsModal } from './PriceListsModal'
 import {
   STOCK_STATUS,
   fmtQty,
@@ -93,6 +95,7 @@ export function ProductsPage() {
   const { tenant, can, hasModule } = useAuth()
   const currency = tenant?.currency ?? 'DOP'
   const canManage = can('products.manage')
+  const canManagePrices = can('prices.manage')
   const canSeeInventory = hasModule('inventory') && can('inventory.view')
 
   const productsQ = useProducts()
@@ -114,6 +117,7 @@ export function ProductsPage() {
   const [creating, setCreating] = useState(false)
   const [showCategories, setShowCategories] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [showPriceLists, setShowPriceLists] = useState(false)
 
   const products = useMemo(() => productsQ.data ?? [], [productsQ.data])
 
@@ -236,6 +240,13 @@ export function ProductsPage() {
         action={
           <>
             <ActionMenu items={headerMenu} title="Catálogo" label="Más acciones del catálogo" className="border border-slate-200 bg-white" />
+            {canManagePrices && (
+              <Button variant="outline" onClick={() => setShowPriceLists(true)} disabled={productsQ.isLoading}>
+                {/* A 360 px no caben tres botones con el texto largo. */}
+                <ListOrdered className="h-4 w-4" /> <span className="sm:hidden">Precios</span>
+                <span className="hidden sm:inline">Listas de precios</span>
+              </Button>
+            )}
             {canManage && (
               <Button onClick={() => setCreating(true)}>
                 <Plus className="h-4 w-4" /> Nuevo
@@ -438,6 +449,7 @@ export function ProductsPage() {
       )}
       {showCategories && <CategoriesModal products={products} onClose={() => setShowCategories(false)} />}
       {showImport && <ImportProductsModal onClose={() => setShowImport(false)} />}
+      {showPriceLists && <PriceListsModal products={products} onClose={() => setShowPriceLists(false)} />}
     </div>
   )
 }

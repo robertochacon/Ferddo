@@ -10,7 +10,8 @@ import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
 import { useToast } from '@/components/ui/toast'
 import { useCustomers } from '@/hooks/core'
-import { useCreateCustomer, useUpdateCustomer } from '@/hooks/customers'
+import { useCreateCustomer, useUpdateCustomer, type UpdateCustomerInput } from '@/hooks/customers'
+import { customerPriceListId, usePriceLists } from '@/hooks/priceLists'
 import { errorMessage } from '@/lib/errors'
 import { checkDocNumber } from '@/lib/labels'
 import type { Customer, CustomerDocType } from '@/types/erp'
@@ -51,6 +52,8 @@ const schema = z
       .max(365, 'Máximo 365'),
     notes: z.string().trim(),
     is_active: z.boolean(),
+    /** '' = sin lista (precio de catálogo). */
+    price_list_id: z.string(),
   })
   .superRefine((v, ctx) => {
     const len = DOC_LENGTH[v.doc_type]
@@ -91,9 +94,14 @@ function CustomerForm({
   customer?: Customer | null
   onSaved?: (id: string) => void
 }) {
-  const { tenant, user } = useAuth()
+  const { tenant, user, can } = useAuth()
   const toast = useToast()
   const customers = useCustomers()
+  const priceLists = usePriceLists()
+  // Asignar lista es dar precio especial: la base lo exige (trigger de 0023)
+  // aunque quien edite solo tenga customers.manage.
+  const canAssignList = can('prices.manage')
+  const currentListId = customerPriceListId(customer)
   const create = useCreateCustomer()
   const update = useUpdateCustomer()
   // Un id por apertura del formulario: si el alta se reintenta, la base ve la
@@ -122,6 +130,7 @@ function CustomerForm({
       credit_days: customer?.credit_days ?? 30,
       notes: customer?.notes ?? '',
       is_active: customer?.is_active ?? true,
+      price_list_id: currentListId ?? '',
     },
   })
 
@@ -158,9 +167,15 @@ function CustomerForm({
       credit_days: v.credit_days,
       notes: v.notes || null,
     }
+    const listId = v.price_list_id || null
+    // Solo se manda si cambió y quien edita puede asignar listas: así editar el
+    // teléfono de un cliente con lista no choca con el trigger de permisos.
+    const listChanged = canAssignList && listId !== currentListId
     try {
       if (customer) {
-        await update.mutateAsync({ id: customer.id, ...fields, is_active: v.is_active })
+        const patch: UpdateCustomerInput = { id: customer.id, ...fields, is_active: v.is_active }
+        if (listChanged) patch.price_list_id = listId
+        await update.mutateAsync(patch)
         toast.success('Cliente actualizado')
         onSaved?.(customer.id)
       } else {
@@ -168,12 +183,28 @@ function CustomerForm({
         const input = { id: newId, tenant_id: tenant.id, created_by: user?.id ?? null, ...fields }
         if (onlineManager.isOnline()) {
           await create.mutateAsync(input)
-          toast.success('Cliente creado')
+          // La lista va en un UPDATE aparte: el alta pasa por la cola offline,
+          // cuya forma (CreateCustomerInput) no lleva lista, y una fila
+          // rehidratada mañana no sabría qué hacer con un campo nuevo.
+          if (listChanged) {
+            try {
+              await update.mutateAsync({ id: newId, price_list_id: listId })
+              toast.success('Cliente creado con su lista de precios')
+            } catch (err) {
+              toast.error(`El cliente se creó, pero no se pudo asignar la lista: ${errorMessage(err)}`)
+            }
+          } else {
+            toast.success('Cliente creado')
+          }
         } else {
           // Sin red la mutación queda en cola y su promesa no se resuelve hasta
           // que vuelva la señal: se dispara y se cierra el formulario.
           create.mutate(input)
-          toast.info('Sin conexión: el cliente se guardó en el teléfono y se subirá al volver la señal.')
+          toast.info(
+            listChanged
+              ? 'Sin conexión: el cliente se subirá al volver la señal. Asígnale la lista de precios después, desde su ficha.'
+              : 'Sin conexión: el cliente se guardó en el teléfono y se subirá al volver la señal.',
+          )
         }
         onSaved?.(newId)
       }
@@ -269,6 +300,31 @@ function CustomerForm({
             <Input inputMode="numeric" {...register('credit_days')} />
           </Field>
         </div>
+
+        <Field
+          label="Lista de precios"
+          hint={
+            !canAssignList
+              ? 'Solo quien gestiona precios puede cambiar la lista del cliente.'
+              : priceLists.isError
+                ? errorMessage(priceLists.error, 'No se pudieron cargar las listas.')
+                : (priceLists.data ?? []).length === 0 && !priceLists.isLoading
+                  ? 'Aún no hay listas. Créalas en Productos → Listas de precios.'
+                  : 'El POS y las cotizaciones le cobran los precios de esta lista.'
+          }
+        >
+          <Select {...register('price_list_id')} disabled={!canAssignList || priceLists.isLoading}>
+            <option value="">Precio de catálogo (sin lista)</option>
+            {(priceLists.data ?? [])
+              .filter((l) => l.is_active || l.id === currentListId)
+              .map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                  {l.is_active ? '' : ' (inactiva)'}
+                </option>
+              ))}
+          </Select>
+        </Field>
 
         <Field label="Notas">
           <Textarea rows={2} {...register('notes')} />

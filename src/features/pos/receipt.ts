@@ -167,6 +167,10 @@ export function buildSaleReceiptHtml(input: SaleReceiptInput): string {
   html.push(row('Subtotal', m(sale.subtotal)))
   if (sale.discount_total > 0) html.push(row('Descuento', `-${m(sale.discount_total)}`))
   html.push(row('ITBIS', m(sale.tax_total)))
+  // 10 % de ley (restaurante): va fuera de las líneas y sin ITBIS, pero dentro
+  // de `total`; sin esta fila el ticket no cuadraría.
+  const serviceCharge = Number(sale.service_charge ?? 0)
+  if (serviceCharge > 0) html.push(row('Servicio (10 % de ley)', m(serviceCharge)))
   html.push(row('TOTAL', m(sale.total), true))
   html.push('</table>')
 

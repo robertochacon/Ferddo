@@ -69,7 +69,8 @@ auth.users ──< tenant_members >── tenants ──< branches ──< cash_
 | 5 Mini ERP | Compras (borrador→orden→recepción), cuentas por pagar, gastos, cotizaciones y conversión a venta, cuentas por cobrar con antigüedad | **Completado** |
 | 6 Reportes | Tablero, ventas por día/producto/categoría/vendedor/sucursal/método, ITBIS, gastos, valoración de inventario, exportación CSV | **Completado** |
 | 7 Administración SaaS | Planes Básico/Negocio/Empresa con límites y módulos configurables, historial de suscripción, suspensión controlada por vencimiento, panel global agregado | **Completado** (pasarela de pago **Pendiente**) |
-| 8 Especializados | Restaurante (mesas, comandas, cocina), taller (órdenes de trabajo, vehículos), citas | **Pendiente** |
+| 8 Especializados | Restaurante (áreas, mesas, cuentas, comandas, pantalla de cocina, dividir/unir cuentas, 10 % de ley) y taller (vehículos/equipos, órdenes de trabajo, cotización, anticipos, facturación) sobre el mismo `create_sale` | **Completado** (citas **Pendiente**) |
+| 9 Comercial avanzado | Listas de precios por cliente, recepción parcial de compras | **Completado** (productos compuestos **Pendiente**) |
 
 ## 4. Migraciones
 
@@ -85,6 +86,9 @@ auth.users ──< tenant_members >── tenants ──< branches ──< cash_
 | `0018_plans_reports_admin` | Planes y límites, historial de suscripción, siembra de empresas, tablero, reportes, panel global, purga de todo el ERP. |
 | `0019_module_fixes` | Compras ⇒ cuentas por pagar en los tipos de negocio (hallazgo de la prueba de integración). |
 | `0020_expense_paid_sync` | Al saldar la cuenta por pagar de un gasto, el gasto pasa a pagado. |
+| `0021_phase8_enums` | `payment_method 'advance'`, `cash_movement_kind 'advance'`, estados de cocina, cuentas y órdenes de trabajo. |
+| `0022_restaurant_workshop` | Restaurante y taller completos + `sales.service_charge` (10 % de ley) + `create_sale` con anticipos validados contra la orden de trabajo. |
+| `0023_price_lists_partial_receipts` | Listas de precios (`price_lines` con 5.º parámetro, `preview_totals` con cliente) y recepción parcial (`purchase_receipts`, `received_qty`, una cuenta por pagar por recepción). |
 
 Todas aplicadas en el proyecto Supabase **Ferddo Saas** (`zhqhwqkmdlhnmtrhgner`).
 Ninguna es destructiva sobre datos reales (la base estaba vacía).
@@ -140,7 +144,7 @@ Ninguna es destructiva sobre datos reales (la base estaba vacía).
 
 | Prueba | Comando | Qué cubre |
 |---|---|---|
-| Integración de base de datos | `npm run test:db` (`supabase/tests/erp_integration.sql`) | 64 aserciones (todas en verde): aislamiento entre empresas, permisos por rol, multiempresa, venta idempotente, ITBIS, pago mixto, crédito y límite, abonos y conciliación, devoluciones, anulación, kardex = existencia, e-CF (secuencias, e-NCF, nota de crédito, cola exclusiva de service_role, veredicto final inmutable), compras y costo promedio, cuentas por pagar, cotización→venta sin duplicar, gastos, arqueo, tablero, ITBIS, límites de plan y módulo, suscripción vencida, privacidad del super-admin, purga completa. Corre en una transacción que se revierte: no deja datos. |
+| Integración de base de datos | `npm run test:db` (`supabase/tests/erp_integration.sql` + `phase8_integration.sql`) | 71 + 25 aserciones (todas en verde), además de las comprobaciones de error. Núcleo: aislamiento entre empresas, permisos por rol, multiempresa, venta idempotente, ITBIS, pago mixto, crédito y límite, abonos y conciliación, devoluciones, anulación, kardex = existencia, e-CF (secuencias, e-NCF, nota de crédito, cola exclusiva de service_role, veredicto final inmutable), compras y costo promedio, cuentas por pagar, cotización→venta sin duplicar, gastos, arqueo, tablero, ITBIS, límites de plan y módulo, suscripción vencida, privacidad del super-admin, purga completa. Corre en una transacción que se revierte: no deja datos. |
 | Unitarias del cálculo | `npm test` | Espejo TS de `price_lines()` con los mismos casos que la prueba SQL. |
 | Tipos | `npm run lint` | `tsc -b --noEmit` estricto. |
 | Build | `npm run build` | Bundle de producción. |
@@ -176,6 +180,6 @@ Limitaciones conocidas: archivos reemplazados en Storage (imágenes, adjuntos ab
 1. Proveedor e-CF autorizado (adaptador + certificación) — **crítico por plazo**.
 2. Desplegar la Edge Function `ecf` y su cron; SMTP propio.
 3. Pasarela de pago para suscripciones (Edge Function + webhook firmado, idempotente).
-4. Fase 8: restaurante (mesas/comandas reutilizando `create_sale`) y taller (órdenes de trabajo → cotización → venta).
 5. Agente local de impresión ESC/POS; estudio del POS offline.
-6. Listas de precios, productos compuestos, recepción parcial de compras.
+6. Productos compuestos (recetas/kits que descuentan componentes), citas para consultorios y servicios.
+7. Reportar el 10 % de ley y los anticipos en el e-CF según el formato del proveedor elegido.

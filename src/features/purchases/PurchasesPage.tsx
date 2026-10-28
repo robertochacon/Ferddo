@@ -15,14 +15,15 @@ import { Select } from '@/components/ui/Select'
 import { StatCard } from '@/components/ui/StatCard'
 import { EmptyState, PageLoader } from '@/components/ui/misc'
 import { useBranches, useSuppliers } from '@/hooks/core'
-import { usePurchases } from '@/hooks/purchases'
+import { PARTIAL_RECEIPT_STATUS, purchaseStatusInfo, usePurchases } from '@/hooks/purchases'
 import { errorMessage } from '@/lib/errors'
 import { fmtDateShort, money, norm } from '@/lib/format'
 import { PURCHASE_STATUS } from '@/lib/labels'
 import type { PurchaseStatus } from '@/types/erp'
 import { todayIso } from '@/features/receivables/paymentShared'
 
-type StatusFilter = PurchaseStatus | 'all'
+/** 'partial' no es un estado de la base: 'ordered' con algo ya recibido. */
+type StatusFilter = PurchaseStatus | 'partial' | 'all'
 const PAGE_SIZE = 25
 
 export function PurchasesPage() {
@@ -53,7 +54,9 @@ function PurchasesContent() {
   const rows = useMemo(() => {
     const q = norm(search)
     return (purchases.data ?? []).filter((p) => {
-      if (status !== 'all' && p.status !== status) return false
+      if (status === 'partial') {
+        if (!p.partially_received) return false
+      } else if (status !== 'all' && p.status !== status) return false
       if (!q) return true
       return (
         norm(p.number).includes(q) ||
@@ -103,6 +106,7 @@ function PurchasesContent() {
                 {PURCHASE_STATUS[s].label}
               </option>
             ))}
+            <option value="partial">{PARTIAL_RECEIPT_STATUS.label}</option>
           </Select>
         </Field>
         <Field label="Buscar">
@@ -191,7 +195,7 @@ function PurchasesContent() {
                       {[p.supplier_invoice, p.supplier_ncf].filter(Boolean).join(' · ') || '—'}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge tone={PURCHASE_STATUS[p.status].tone}>{PURCHASE_STATUS[p.status].label}</Badge>
+                      <StatusBadge status={p.status} partial={p.partially_received} />
                     </td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums">{money(p.total, currency)}</td>
                   </tr>
@@ -206,7 +210,7 @@ function PurchasesContent() {
                 title={`${p.number} · ${supplierName.get(p.supplier_id) ?? ''}`}
                 titleExtra={fmtDateShort(p.order_date)}
                 onClick={() => navigate(`/compras/${p.id}`)}
-                badges={<Badge tone={PURCHASE_STATUS[p.status].tone}>{PURCHASE_STATUS[p.status].label}</Badge>}
+                badges={<StatusBadge status={p.status} partial={p.partially_received} />}
                 actions={
                   <Button size="sm" variant="ghost" onClick={() => navigate(`/compras/${p.id}`)}>
                     Abrir
@@ -225,4 +229,9 @@ function PurchasesContent() {
       )}
     </div>
   )
+}
+
+function StatusBadge({ status, partial }: { status: PurchaseStatus; partial: boolean }) {
+  const info = purchaseStatusInfo(status, partial)
+  return <Badge tone={info.tone}>{info.label}</Badge>
 }

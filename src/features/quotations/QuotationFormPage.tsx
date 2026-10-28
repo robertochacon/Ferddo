@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { addDays, format } from 'date-fns'
 import { AlertTriangle, ArrowLeft, Check, Plus, Printer, Save, Send, ShoppingBag, Trash2, X } from 'lucide-react'
@@ -14,6 +14,7 @@ import { Select } from '@/components/ui/Select'
 import { EmptyState, PageLoader } from '@/components/ui/misc'
 import { useToast } from '@/components/ui/toast'
 import { useBranches, useCustomers, useProducts, useTaxes } from '@/hooks/core'
+import { customerPriceListId, useListPrices } from '@/hooks/priceLists'
 import {
   useQuotation,
   useSaveQuotation,
@@ -37,7 +38,10 @@ interface Line {
   product_id: string
   description: string
   quantity: string
+  /** Solo cuenta si `overridden`: si no, el precio es el base vigente (lista del cliente o catálogo). */
   unit_price: string
+  /** Precio escrito a mano. Solo estas líneas mandan `unit_price` a la base. */
+  overridden: boolean
   discount: string
   tax_rate: number
 }
@@ -66,7 +70,12 @@ const num = (s: string) => {
 }
 
 function serialize(h: Header, ls: Line[]): string {
-  return JSON.stringify({ h, l: ls.map((l) => [l.product_id, l.quantity, l.unit_price, l.discount]) })
+  // Una línea sin precio manual sigue al precio base: su `unit_price` guardado
+  // no significa nada y no debe marcar el formulario como cambiado.
+  return JSON.stringify({
+    h,
+    l: ls.map((l) => [l.product_id, l.quantity, l.overridden ? l.unit_price : '', l.discount]),
+  })
 }
 
 export function QuotationFormPage() {
@@ -112,11 +121,39 @@ function QuotationForm() {
   const productById = useMemo(() => new Map((products.data ?? []).map((p) => [p.id, p])), [products.data])
   const rateOf = (p: Product | undefined) => Number((taxes.data ?? []).find((t) => t.id === p?.tax_id)?.rate ?? 0)
 
+  // Precio base = el que pondrá save_quotation(): lista del cliente si el
+  // producto está en ella, si no el del catálogo. Antes de cargar una
+  // cotización existente manda SU cliente, para comparar sus líneas con él.
+  const pricingCustomerId = !id || loadedFor ? header.customer_id : (detail.data?.quotation.customer_id ?? '')
+  const pricingCustomer = (customers.data ?? []).find((c) => c.id === pricingCustomerId)
+  const listPrices = useListPrices(customerPriceListId(pricingCustomer))
+  const basePriceOf = useCallback(
+    (productId: string): number | undefined => {
+      const listed = listPrices.prices?.get(productId)
+      if (listed !== undefined) return listed
+      const p = productById.get(productId)
+      return p ? Number(p.price) : undefined
+    },
+    [listPrices.prices, productById],
+  )
+  const effPrice = useCallback(
+    (l: Line): string => {
+      if (l.overridden) return l.unit_price
+      const base = basePriceOf(l.product_id)
+      return base === undefined ? l.unit_price : String(base)
+    },
+    [basePriceOf],
+  )
+  const listName = listPrices.prices ? (listPrices.list?.name ?? null) : null
+
   const current = serialize(header, lines)
   const dirty = !id || current !== snapshot
 
   useEffect(() => {
     if (!id || !detail.data || !products.data || !taxes.data) return
+    // Sin la lista del cliente, una línea cotizada a precio de lista parecería
+    // un precio cambiado a mano.
+    if (detail.data.quotation.customer_id && (customers.isLoading || listPrices.isLoading)) return
     const stamp = `${id}:${detail.dataUpdatedAt}`
     if (loadedFor === stamp) return
     if (loadedFor?.startsWith(`${id}:`) && dirty) return
@@ -132,16 +169,19 @@ function QuotationForm() {
     let changed = false
     const ls: Line[] = detail.data.items.map((it) => {
       const p = productById.get(it.product_id)
-      // Sin permiso para cambiar precios, al guardar la base usará el precio
-      // vigente del catálogo; la vista previa lo refleja desde ya.
-      const price = !canOverride && p ? Number(p.price) : it.unit_price
-      if (price !== it.unit_price) changed = true
+      const base = basePriceOf(it.product_id)
+      // Igual al base: la línea sigue al precio vigente (y se repreciará si
+      // cambia el cliente). Distinto: quien puede cambiar precios conserva el
+      // cotizado; quien no, ve el vigente, que es el que pondrá la base.
+      const differs = base !== undefined && it.unit_price !== base
+      if (differs && !canOverride) changed = true
       return {
         key: it.id,
         product_id: it.product_id,
         description: it.description,
         quantity: String(it.quantity),
-        unit_price: String(price),
+        unit_price: String(it.unit_price),
+        overridden: differs && canOverride,
         discount: it.line_discount ? String(it.line_discount) : '',
         tax_rate: p ? rateOf(p) : it.tax_rate,
       }
@@ -153,7 +193,20 @@ function QuotationForm() {
     setRepriced(changed && editable)
     setLoadedFor(stamp)
     // rateOf/productById derivan de products/taxes, que ya están en las dependencias.
-  }, [id, detail.data, detail.dataUpdatedAt, products.data, taxes.data, loadedFor, dirty, canOverride, editable])
+  }, [
+    id,
+    detail.data,
+    detail.dataUpdatedAt,
+    products.data,
+    taxes.data,
+    loadedFor,
+    dirty,
+    canOverride,
+    editable,
+    customers.isLoading,
+    listPrices.isLoading,
+    basePriceOf,
+  ])
 
   useEffect(() => {
     if (!id && !header.branch_id && branches.data?.length) {
@@ -167,14 +220,14 @@ function QuotationForm() {
       priceLines(
         lines.map((l) => ({
           quantity: num(l.quantity),
-          unit_price: num(l.unit_price),
+          unit_price: num(effPrice(l)),
           discount: canDiscount ? num(l.discount) : 0,
           tax_rate: l.tax_rate,
         })),
         canDiscount ? num(header.global_discount) : 0,
         tenant?.prices_include_tax ?? true,
       ),
-    [lines, header.global_discount, canDiscount, tenant?.prices_include_tax],
+    [lines, header.global_discount, canDiscount, tenant?.prices_include_tax, effPrice],
   )
 
   const sellable = useMemo(() => (products.data ?? []).filter((p) => p.is_active), [products.data])
@@ -200,6 +253,7 @@ function QuotationForm() {
           description: p.name + (p.variant_label ? ` ${p.variant_label}` : ''),
           quantity: '1',
           unit_price: String(Number(p.price)),
+          overridden: false,
           discount: '',
           tax_rate: rateOf(p),
         },
@@ -215,7 +269,7 @@ function QuotationForm() {
     for (const l of lines) {
       const q = parseAmount(l.quantity)
       if (!Number.isFinite(q) || q <= 0) return `Cantidad inválida en "${l.description}"`
-      const pr = parseAmount(l.unit_price)
+      const pr = parseAmount(effPrice(l))
       if (!Number.isFinite(pr) || pr < 0) return `Precio inválido en "${l.description}"`
       const d = l.discount.trim() ? parseAmount(l.discount) : 0
       if (!Number.isFinite(d) || d < 0 || d > round2(q * pr)) return `Descuento inválido en "${l.description}"`
@@ -240,9 +294,10 @@ function QuotationForm() {
       items: lines.map((l) => ({
         product_id: l.product_id,
         quantity: num(l.quantity),
-        // Sin permiso de cambiar precios no se manda: la base usa el del catálogo
-        // y no rechaza la cotización por una diferencia que el usuario no puede tocar.
-        ...(canOverride ? { unit_price: num(l.unit_price) } : {}),
+        // Solo el precio escrito a mano: sin él la base pone el de la lista del
+        // cliente (o el del catálogo), y quien no puede cambiar precios nunca
+        // manda uno que la base rechazaría.
+        ...(canOverride && l.overridden ? { unit_price: num(l.unit_price) } : {}),
         ...(canDiscount && num(l.discount) > 0 ? { discount: num(l.discount) } : {}),
       })),
     }
@@ -269,7 +324,11 @@ function QuotationForm() {
 
   // Las líneas se arman con el catálogo (precio vigente, tasa de ITBIS): hasta
   // que llega, se espera en vez de enseñar un formulario vacío.
-  if (id && (detail.isLoading || (detail.data && !loadedFor && (products.isLoading || taxes.isLoading)))) {
+  if (
+    id &&
+    (detail.isLoading ||
+      (detail.data && !loadedFor && (products.isLoading || taxes.isLoading || customers.isLoading || listPrices.isLoading)))
+  ) {
     return <PageLoader label="Cargando cotización…" />
   }
   if (id && (detail.isError || !detail.data)) {
@@ -318,7 +377,8 @@ function QuotationForm() {
       )}
       {repriced && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Algunos precios cambiaron en el catálogo desde que se hizo esta cotización. Al guardarla se usarán los vigentes.
+          Algunos precios cambiaron (en el catálogo o en la lista de precios del cliente) desde que se hizo esta
+          cotización. Al guardarla se usarán los vigentes.
         </div>
       )}
 
@@ -364,7 +424,10 @@ function QuotationForm() {
           <CardHeader title="Datos" />
           <CardBody className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Cliente" hint="Opcional: se puede cotizar a un cliente de paso.">
+              <Field
+                label="Cliente"
+                hint={listName ? `Lista de precios: ${listName}` : 'Opcional: se puede cotizar a un cliente de paso.'}
+              >
                 {editable && (customers.data ?? []).length > 20 && (
                   <Input
                     value={customerSearch}
@@ -434,6 +497,9 @@ function QuotationForm() {
             <ul className="divide-y divide-slate-100">
               {lines.map((l, i) => {
                 const priced = preview.lines[i]
+                const fromList = listPrices.prices?.has(l.product_id) ?? false
+                const baseLabel = fromList ? 'Precio de lista' : 'Precio del catálogo'
+                const base = basePriceOf(l.product_id)
                 return (
                   <li key={l.key} className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -451,13 +517,28 @@ function QuotationForm() {
                       <Field label="Cantidad">
                         <Input inputMode="decimal" value={l.quantity} onChange={(e) => patchLine(l.key, { quantity: e.target.value })} />
                       </Field>
-                      <Field label="Precio" hint={canOverride ? undefined : 'Precio del catálogo'}>
+                      <Field
+                        label="Precio"
+                        hint={
+                          l.overridden && base !== undefined ? (
+                            <button
+                              type="button"
+                              className="font-medium text-brand-700 underline"
+                              onClick={() => patchLine(l.key, { overridden: false })}
+                            >
+                              Volver a {baseLabel.toLowerCase()} ({money(base, currency)})
+                            </button>
+                          ) : canOverride && !fromList ? undefined : (
+                            baseLabel
+                          )
+                        }
+                      >
                         <Input
                           inputMode="decimal"
-                          value={l.unit_price}
+                          value={effPrice(l)}
                           readOnly={!canOverride}
                           className={canOverride ? undefined : 'bg-slate-50'}
-                          onChange={(e) => patchLine(l.key, { unit_price: e.target.value })}
+                          onChange={(e) => patchLine(l.key, { unit_price: e.target.value, overridden: true })}
                         />
                       </Field>
                       {canDiscount && (

@@ -91,10 +91,20 @@ export interface PreviewTotals {
  */
 export function usePreviewTotals() {
   return useMutation({
-    mutationFn: async (input: { items: SaleLinePayload[]; globalDiscount: number }): Promise<PreviewTotals> => {
+    mutationFn: async (input: {
+      items: SaleLinePayload[]
+      globalDiscount: number
+      /**
+       * Cliente de la venta: la base toma de su lista de precios el precio de
+       * las líneas sin `unit_price`, igual que hará create_sale(). Sin él, la
+       * vista previa saldría a precio de catálogo y no cuadraría con el cobro.
+       */
+      customerId?: string | null
+    }): Promise<PreviewTotals> => {
       const { data, error } = await supabase.rpc('preview_totals', {
         p_items: input.items,
         p_global_discount: input.globalDiscount,
+        p_customer: input.customerId ?? null,
       })
       if (error) throw error
       const r = (data ?? {}) as Record<string, unknown>

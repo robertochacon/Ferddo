@@ -56,7 +56,15 @@ export type UpdateCustomerInput = Partial<
     | 'notes'
     | 'is_active'
   >
-> & { id: string }
+> & {
+  id: string
+  /**
+   * Lista de precios (0023). Va aparte porque `Customer` aún no la declara.
+   * Asignar una lista exige `prices.manage` (trigger de la base): el formulario
+   * solo manda el campo si quien edita tiene ese permiso.
+   */
+  price_list_id?: string | null
+}
 
 export function useUpdateCustomer() {
   const qc = useQueryClient()

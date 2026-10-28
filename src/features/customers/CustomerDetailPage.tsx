@@ -12,6 +12,7 @@ import { StatCard } from '@/components/ui/StatCard'
 import { EmptyState, PageLoader, Spinner } from '@/components/ui/misc'
 import { useCustomer, useCustomerPayments, useCustomerReceivables, useCustomerSales } from '@/hooks/customers'
 import { useMemberNames } from '@/hooks/team'
+import { customerPriceListId, usePriceLists } from '@/hooks/priceLists'
 import { errorMessage } from '@/lib/errors'
 import { fmtDate, fmtDateShort, fmtDateTime, money } from '@/lib/format'
 import { DOCUMENT_STATUS, PAYMENT_METHOD_LABEL, SALE_STATUS } from '@/lib/labels'
@@ -44,6 +45,7 @@ export function CustomerDetailPage() {
   const payments = useCustomerPayments(id)
   const sales = useCustomerSales(id)
   const names = useMemberNames()
+  const priceLists = usePriceLists()
 
   const [tab, setTab] = useState<Tab>('receivables')
   const [payOpen, setPayOpen] = useState(false)
@@ -68,6 +70,8 @@ export function CustomerDetailPage() {
   }
   const c = customer.data
   const limit = Number(c.credit_limit)
+  const listId = customerPriceListId(c)
+  const priceList = listId ? (priceLists.data ?? []).find((l) => l.id === listId) : undefined
 
   const openPay = (receivableId?: string) => {
     setPayTarget(receivableId)
@@ -129,6 +133,21 @@ export function CustomerDetailPage() {
             <Info label="Teléfono">{c.phone ?? '—'}</Info>
             <Info label="Correo">{c.email ?? '—'}</Info>
             <Info label="Dirección">{c.address ?? '—'}</Info>
+            <Info label="Lista de precios">
+              {!listId ? (
+                'Precio de catálogo'
+              ) : priceList ? (
+                <span className="inline-flex flex-wrap items-center gap-1.5">
+                  {priceList.name}
+                  {/* Una lista inactiva no se aplica: el cliente compra a catálogo. */}
+                  {!priceList.is_active && <Badge tone="amber">Inactiva: se cobra catálogo</Badge>}
+                </span>
+              ) : priceLists.isLoading ? (
+                '…'
+              ) : (
+                '—'
+              )}
+            </Info>
             {c.notes && (
               <Info label="Notas" className="sm:col-span-2 lg:col-span-4">
                 {c.notes}
