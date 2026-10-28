@@ -144,7 +144,7 @@ Ninguna es destructiva sobre datos reales (la base estaba vacía).
 | Unitarias del cálculo | `npm test` | Espejo TS de `price_lines()` con los mismos casos que la prueba SQL. |
 | Tipos | `npm run lint` | `tsc -b --noEmit` estricto. |
 | Build | `npm run build` | Bundle de producción. |
-| Humo en navegador | Playwright sobre `vite preview` | Landing, login, registro y legales a 1366 px y 360 px: sin errores de ejecución ni scroll horizontal; rutas protegidas redirigen al login. **Pendiente**: recorrido con sesión (onboarding → venta) en el navegador, que requiere la configuración de Auth del proyecto (§11). |
+| Humo en navegador | Playwright sobre `vite preview` | Landing, login, registro y legales a 1366 px y 360 px: sin errores de ejecución ni scroll horizontal; rutas protegidas redirigen al login. Recorrido con sesión en la web publicada (2026-10-28): registro → onboarding (colmado) → producto con existencia inicial → abrir caja → venta en efectivo con devuelta → existencia 10→9 → caja con esperado correcto; POS, ventas, productos, configuración y e-CF a 360 px sin scroll horizontal. Datos de prueba purgados después. |
 
 Nunca usar el ambiente de producción de la DGII para pruebas.
 
@@ -165,7 +165,8 @@ Limitaciones conocidas: archivos reemplazados en Storage (imágenes, adjuntos ab
 
 ## 11. Pendiente de configuración externa
 
-- `supabase config push` (URLs de GitHub Pages, sin confirmación por correo hasta tener SMTP). Requiere aprobación del dueño del proyecto.
+- ~~`supabase config push`~~ aplicado (URLs de GitHub Pages, sin confirmación por correo). Plantillas de correo: requieren SMTP propio en el plan gratuito.
+- Desplegar la función `welcome` (correo de bienvenida; hoy falla en silencio por CORS al no existir).
 - `supabase functions deploy ecf` + secretos `FISCAL_ENC_KEY`, `ECF_CRON_SECRET` + programar `/ecf/cron`.
 - Primer super-admin: `scripts/grant-platform-admin.sql`.
 - Términos y condiciones: completar razón social, dirección y plazos de conservación (marcadores `<Todo>`).
