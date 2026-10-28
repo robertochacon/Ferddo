@@ -1,0 +1,48 @@
+# Dependencias
+node_modules
+.pnp
+.pnp.js
+
+# Salida del build
+dist
+dist-ssr
+*.local
+
+# Entorno (.env.example SÍ se versiona; .env NO)
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs
+*.log
+
+# Supabase
+supabase/.branches
+supabase/.temp
+supabase/.env
+
+# Pruebas
+coverage
+
+# Varios
+*.tsbuildinfo
+
+# Íconos generados (npm run icons)
+# Salen de public/logo.png y se regeneran en cada build (deploy.yml y el
+# buildCommand de vercel.json los crean antes de compilar), así que versionarlos
+# solo mete binarios duplicados en el historial.
+# public/logo.png SÍ se versiona: es la FUENTE, no un generado.
+public/icons/
+public/favicon.ico
+public/og.png

@@ -1,0 +1,49 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Ferddo · seed
+-- Se ejecuta al final de `supabase db reset` y de `supabase start`, después de
+-- las migraciones de supabase/migrations.
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- ESTÁ VACÍO A PROPÓSITO. No crea ningún usuario de demostración.
+--
+-- ¿Por qué? Porque fabricar una cuenta a mano aquí significa escribir en
+-- `auth.users` y `auth.identities`, y eso:
+--   • depende de la versión de GoTrue (las columnas cambian entre versiones, y
+--     un seed que revienta deja el `db reset` a medias);
+--   • se salta el único camino soportado para dar de alta un negocio, que es
+--     `setup_tenant()`, con sus comprobaciones y su suscripción de prueba;
+--   • deja un usuario con contraseña conocida que tarde o temprano alguien
+--     acaba llevándose a un entorno real.
+--
+-- LA PRIMERA CUENTA SE CREA DESDE LA APP:
+--   1. `npm run dev`
+--   2. Regístrate en /registro (con Supabase local, la confirmación de correo
+--      está apagada: entras directo, y el correo de bienvenida se queda en
+--      Inbucket → http://localhost:54324).
+--   3. La pantalla de bienvenida llama a `setup_tenant()`, que crea el negocio,
+--      tu perfil de `owner` y la suscripción `basic` en prueba de 30 días.
+--
+-- Para el panel de plataforma (/admin) hace falta un super-admin, y ese NO se
+-- puede crear desde el cliente por diseño: usa scripts/grant-platform-admin.sql
+-- con una cuenta SIN negocio.
+--
+-- Los planes (`plan_settings`) no se siembran aquí: los inserta la migración
+-- 0009, que es su única fuente de verdad.
+--
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ¿Quieres datos de ejemplo para tu propio negocio de desarrollo?
+-- Regístrate primero, saca tu tenant_id y descomenta esto:
+--
+--   select id, name from public.tenants;   -- copia el id
+--
+-- insert into public.items (tenant_id, name, description, amount, status, due_date)
+-- values
+--   ('PON-AQUI-TU-TENANT-ID', 'Primer registro',  'Ejemplo en borrador', 1500.00, 'draft',    current_date + 7),
+--   ('PON-AQUI-TU-TENANT-ID', 'Segundo registro', 'Ejemplo activo',      2500.00, 'active',   current_date + 14),
+--   ('PON-AQUI-TU-TENANT-ID', 'Tercer registro',  'Ejemplo archivado',    900.00, 'archived', current_date - 3);
+--
+-- OJO con el tope del plan: `basic` admite pocos `items` y el trigger
+-- `enforce_item_limit()` corta el insert igual que lo haría desde la app.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- (sin sentencias)

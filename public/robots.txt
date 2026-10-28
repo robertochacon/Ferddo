@@ -1,0 +1,10 @@
+# Ferddo
+# La landing y las páginas legales son públicas; todo lo demás vive tras el
+# login y ni siquiera es alcanzable sin sesión, así que no hace falta bloquear
+# rutas: el rastreador solo puede ver lo que se sirve sin autenticar.
+User-agent: *
+Allow: /
+
+# Descomenta cuando publiques un sitemap en public/sitemap.xml.
+# Debe ser una URL absoluta con tu dominio real.
+# Sitemap: https://ferddo.com/sitemap.xml

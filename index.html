@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover para el notch. Sin maximum-scale ni user-scalable:
+         bloquear el zoom es un fallo de accesibilidad; el auto-zoom de iOS se
+         resuelve en src/index.css con font-size:16px. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- SEO principal -->
+    <title>Ferddo — POS, inventario y facturación electrónica para tu negocio</title>
+    <meta
+      name="description"
+      content="Ferddo es el sistema todo en uno para negocios de República Dominicana: punto de venta, inventario, caja, compras, gastos, cuentas por cobrar y facturación electrónica e-CF."
+    />
+    <meta
+      name="keywords"
+      content="Ferddo, POS, punto de venta, inventario, facturación electrónica, e-CF, DGII, República Dominicana, colmado, ferretería, restaurante, ERP"
+    />
+    <meta name="author" content="Ferddo" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#1A5CE6" />
+    <link rel="canonical" href="https://ferddo.com/" />
+
+    <!-- Íconos.
+         El primero es de 48px a propósito: Google pide que el favicon que sale
+         en los resultados de búsqueda sea un múltiplo de 48px. Los de 32 y 16
+         se quedan para la pestaña del navegador.
+         Los genera `npm run icons` en public/icons. -->
+    <link rel="icon" type="image/png" href="/icons/favicon-48.png" sizes="48x48" />
+    <link rel="icon" type="image/png" href="/icons/favicon-96.png" sizes="96x96" />
+    <link rel="icon" type="image/png" href="/icons/favicon-32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="/icons/favicon-16.png" sizes="16x16" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!-- Open Graph (Facebook, WhatsApp, LinkedIn) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Ferddo" />
+    <meta property="og:locale" content="es_DO" />
+    <meta property="og:url" content="https://ferddo.com/" />
+    <meta property="og:title" content="Ferddo — POS, inventario y facturación electrónica para tu negocio" />
+    <meta
+      property="og:description"
+      content="Punto de venta, inventario, caja, compras y facturación electrónica en un solo lugar."
+    />
+    <!-- og:image debe ser absoluta: las redes no resuelven rutas relativas. -->
+    <meta property="og:image" content="https://ferddo.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Ferddo — POS y facturación para tu negocio" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Ferddo — POS, inventario y facturación electrónica para tu negocio" />
+    <meta
+      name="twitter:description"
+      content="Punto de venta, inventario, caja, compras y facturación electrónica en un solo lugar."
+    />
+    <meta name="twitter:image" content="https://ferddo.com/og.png" />
+
+    <!-- Fuentes: preconnect a los DOS orígenes (googleapis sirve el CSS,
+         gstatic los .woff2) para ahorrar un handshake en móvil. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Datos estructurados: le dicen a Google qué es esto, no solo qué dice -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "SoftwareApplication",
+            "name": "Ferddo",
+            "url": "https://ferddo.com/",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web, Android, iOS",
+            "inLanguage": "es",
+            "description": "POS, inventario y facturación electrónica para pequeños negocios de República Dominicana.",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "DOP" }
+          },
+          {
+            "@type": "Organization",
+            "name": "Ferddo",
+            "url": "https://ferddo.com/",
+            "logo": "https://ferddo.com/icons/pwa-512.png"
+          },
+          {
+            "@type": "WebSite",
+            "name": "Ferddo",
+            "url": "https://ferddo.com/",
+            "inLanguage": "es"
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Necesitas habilitar JavaScript para usar Ferddo.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

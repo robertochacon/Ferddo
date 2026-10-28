@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-slate-50 font-sans text-slate-800 antialiased;
+  }
+  /* Evita el auto-zoom de iOS al enfocar campos <16px. Va con !important porque
+     los componentes (Input/Select/Textarea) aplican la clase `.text-sm` (14px),
+     y en Tailwind v3 una clase gana por especificidad/orden a un selector de
+     elemento; sin !important esta regla no se aplicaría y iOS haría zoom al
+     entrar al login. La alternativa (maximum-scale=1 / user-scalable=no en el
+     viewport) está prohibida: rompe el zoom manual y es un fallo de
+     accesibilidad. */
+  @media (max-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

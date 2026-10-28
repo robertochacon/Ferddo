@@ -1,0 +1,176 @@
+# Ferddo — configuración del proyecto Supabase.
+# Vale para el stack local (`supabase start`) y, con `supabase config push`,
+# para el proyecto hosted.
+# Docs: https://supabase.com/docs/guides/local-development
+project_id = "ferddo"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+# Buzón de pruebas local: los correos de auth NO salen a internet en desarrollo,
+# se leen en http://localhost:54324.
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+# Site URL del proyecto HOSTED: el dominio propio de producción, a donde
+# apuntan los correos cuando no se pide otra cosa.
+site_url = "https://robertochacon.github.io/Ferddo/"
+# TODO `redirectTo` que use la app (recuperación de contraseña, confirmación,
+# retorno de Google) tiene que estar en esta lista o GoTrue lo IGNORA en
+# silencio y manda al site_url — es decir, a producción, aunque estés en local.
+#
+# Las entradas SIN comodín casan solo con esa URL exacta. Por eso van también
+# las de "/**": en desarrollo la app puede servirse bajo un base distinto de "/"
+# (ver VITE_BASE en vite.config.ts) y con HashRouter la URL de vuelta arrastra
+# el fragmento, así que sin comodín el enlace del correo se descartaba.
+#
+# IMPORTANTE: esto solo llega al proyecto hosted con `supabase config push`.
+additional_redirect_urls = [
+  # Publicación actual: GitHub Pages ("project page" bajo /Ferddo/).
+  "https://robertochacon.github.io/Ferddo/",
+  "https://robertochacon.github.io/Ferddo",
+  "https://robertochacon.github.io/Ferddo/**",
+  "https://ferddo.com/",
+  "https://ferddo.com",
+  "https://ferddo.com/**",
+  # Si además despliegas en una "project page" de GitHub Pages, añade aquí las
+  # tres variantes de https://usuario.github.io/mi-repo — mismo motivo.
+  "http://localhost:5173",
+  "http://localhost:5173/**",
+  "http://127.0.0.1:5173/**",
+  # `npm run preview` (build de producción en local), útil para probar el OAuth.
+  "http://localhost:4173/**",
+]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+# OJO: GoTrue IGNORA esta opción mientras `enable_confirmations` esté en false
+# (ver abajo): el cambio de correo se aplica confirmando solo desde la dirección
+# nueva. Se deja puesta para que vuelva a valer si algún día se reactiva la
+# confirmación. Hoy quien protege ese cambio es la contraseña que vuelve a pedir
+# la app (src/hooks/profile.ts → useChangeEmail).
+double_confirm_changes = true
+# Confirmación de correo APAGADA a propósito: con ella encendida, `signUp` no
+# devuelve sesión y quien acaba de registrarse tiene que salir de la app a
+# buscar un correo para poder entrar. Mucha gente cierra ahí y no vuelve.
+#
+# Apagada, el registro entra directo y no hay nada que confirmar. En lugar del
+# correo de confirmación se manda uno de BIENVENIDA desde la Edge Function
+# `welcome` (Supabase Auth no tiene plantilla para eso).
+#
+# EL PRECIO, que hay que aceptar a sabiendas: alguien puede registrarse con un
+# correo que no es suyo (no le da acceso a nada ajeno, pero deja esa dirección
+# ocupada) y se pierde la protección contra ENUMERACIÓN DE CORREOS — al intentar
+# registrar una dirección ya usada, la API responde "User already registered"
+# en vez de disimularlo. Si tu producto no puede permitirse eso, pon
+# `enable_confirmations = true` y borra la llamada a `welcome` del registro.
+enable_confirmations = false
+
+# Proveedor SMTP propio (aquí Resend). Sin esto, el proyecto hosted usa el SMTP
+# compartido de Supabase, que está limitado a unos pocos correos por hora y no
+# sirve para producción.
+# La clave se pasa como variable de entorno al hacer el push:
+#   SMTP_PASSWORD="re_..." supabase config push
+[auth.email.smtp]
+# APAGADO hasta tener SMTP_PASSWORD: un `config push` con la variable vacía
+# dejaría el SMTP roto y ningún correo de Auth saldría. Mientras tanto Supabase
+# usa su remitente compartido (pocos correos por hora). Enciéndelo al configurar
+# Resend y empuja SIEMPRE con la variable en el entorno.
+enabled = false
+host = "smtp.resend.com"
+port = 465
+user = "resend"
+pass = "env(SMTP_PASSWORD)"
+# Cámbialo por un remitente verificado en tu dominio.
+admin_email = "onboarding@resend.dev"
+sender_name = "Ferddo"
+
+# Plantillas de correo con la marca Ferddo (se aplican con SMTP configurado).
+[auth.email.template.confirmation]
+subject = "Confirma tu cuenta en Ferddo"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Restablece tu contraseña — Ferddo"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.magic_link]
+subject = "Tu enlace de acceso a Ferddo"
+content_path = "./supabase/templates/magic_link.html"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entrar / registrarse con Google.
+#
+# El intercambio con Google lo hace el SERVIDOR de Supabase, no el navegador:
+# Google redirige SIEMPRE a https://<PROJECT-REF>.supabase.co/auth/v1/callback
+# (ese es el "Authorized redirect URI" que hay que registrar en Google Cloud
+# Console) y desde ahí Supabase devuelve a la app, al `redirectTo` que se le
+# pasó — que debe casar con site_url o con additional_redirect_urls de arriba.
+# Por eso el acceso con Google NO añade ninguna variable VITE_ al frontend.
+#
+# ⚠️ ESTE BLOQUE TIENE QUE EXISTIR aunque ya hayas activado el proveedor a mano
+# en el panel: `supabase config push` sincroniza el archivo COMPLETO, así que
+# sin él el push APAGARÍA Google. Y por el mismo motivo que SMTP_PASSWORD, un
+# push sin estas dos variables en el entorno dejaría las credenciales vacías y
+# tumbaría el acceso. Las tres van en la misma orden:
+#   SMTP_PASSWORD="re_..." \
+#   SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID="....apps.googleusercontent.com" \
+#   SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET="GOCSPX-..." \
+#     supabase config push
+#
+# Si no vas a ofrecer Google, pon `enabled = false` pero DEJA el bloque.
+[auth.external.google]
+# Apagado hasta registrar el cliente OAuth de Google para este proyecto.
+enabled = false
+# El client_id es público por diseño (viaja en la URL de consentimiento), pero
+# se deja como env para que el repo no fije las credenciales de un proyecto.
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+# Vacío a propósito: solo se rellena si Supabase Auth vive en un dominio propio.
+# Con el dominio *.supabase.co, el callback lo arma Supabase.
+redirect_uri = ""
+# El nonce de OIDC SÍ se comprueba. Solo se desactiva para el flujo nativo con
+# id_token en Android/iOS; en el redirect web no aplica.
+skip_nonce_check = false
+
+[edge_runtime]
+enabled = true
+policy = "oneshot"
+
+# Correo de bienvenida tras el registro. Exige JWT y, dentro, vuelve a validar
+# con auth.getUser(): el gateway acepta la anon key como JWT válido, así que sin
+# esa segunda comprobación cualquiera podría mandar correos a direcciones
+# ajenas. Ver supabase/functions/welcome/index.ts.
+[functions.welcome]
+verify_jwt = true
+
+# Cola de facturación electrónica. JWT apagado en el gateway SOLO porque la ruta
+# /ecf/cron la llama un programador sin sesión (va protegida con x-cron-secret);
+# /ecf/process y /ecf/credentials validan el token por su cuenta con
+# auth.getUser(). Ver supabase/functions/ecf/index.ts.
+[functions.ecf]
+verify_jwt = false

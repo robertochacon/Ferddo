@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aviso de privacidad · Ferddo</title>
+
+    <!--
+      REDIRECTOR DE LA URL LIMPIA: ferddo.com/privacidad → /#/privacidad
+
+      ¿Por qué existe este archivo? Con HashRouter (el defecto del starter) la
+      ruta de verdad es `/#/privacidad`, pero hay sitios donde solo cabe pegar
+      una dirección normal: el campo "Privacy policy URL" de la pantalla de
+      consentimiento de Google OAuth —que este starter activa en config.toml—,
+      el formulario de una tienda de apps, un buscador, o alguien que la escribe
+      a mano. Sin este archivo, el hosting (GitHub Pages, Vercel) responde su
+      propio 404 a esa URL.
+
+      Este es el camino SIN service worker: el hosting sirve estos bytes y aquí
+      se salta al fragmento. El camino CON service worker instalado es el otro:
+      la navegación no llega a la red, el SW responde con el index.html
+      precacheado y de la ruta se encarga src/lib/cleanPaths.ts. Por eso
+      vite.config.ts excluye este archivo del precache (globIgnores): con SW
+      nunca se ejecuta y precachearlo sería peso muerto.
+
+      OJO SI ACTIVAS VITE_ROUTER=browser: ahí `/privacidad` YA es la ruta real y
+      este redirector sobra (mandaría a `/#/privacidad`, que en modo browser es
+      la portada). En ese despliegue, borra public/privacidad/ y public/terminos/.
+    -->
+
+    <!-- Canónica: la URL limpia, que es la que se comparte y la que se pega en
+         formularios de terceros. Va absoluta porque una canónica relativa no
+         vale, y sin fragmento porque los rastreadores lo ignoran. Cambia el
+         dominio: `npm run rename` sustituye el marcador ferddo. -->
+    <link rel="canonical" href="https://ferddo.com/privacidad" />
+
+    <!-- Respaldo estático para quien tenga JS desactivado. Es RELATIVA a
+         propósito: este archivo siempre vive un nivel por debajo de la raíz de
+         la app, así que `../` acierta tanto en un dominio propio (base '/')
+         como en una project page de GitHub Pages (base '/mi-repo/'), donde un
+         '/#/privacidad' a pelo saldría del proyecto. -->
+    <meta http-equiv="refresh" content="0; url=../#/privacidad" />
+
+    <script>
+      // El salto bueno: el destino se calcula, no se escribe. Se le quita a la
+      // ruta actual el último segmento (`privacidad/`, con o sin `index.html`) y
+      // lo que queda es la raíz de la app, sea '/' o '/mi-repo/'. `replace` y no
+      // `href` para no dejar este redirector en el historial: el botón "atrás"
+      // volvería aquí y rebotaría otra vez.
+      ;(function () {
+        var root = location.pathname.replace(/privacidad\/?(index\.html)?$/i, '')
+        if (root.charAt(root.length - 1) !== '/') root += '/'
+        location.replace(root + location.search + '#/privacidad')
+      })()
+    </script>
+
+    <style>
+      body {
+        margin: 0;
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+        color: #172554;
+        background: #eff6ff;
+        text-align: center;
+      }
+      a {
+        color: #2563eb;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Último recurso VISIBLE: si al lector le fallan a la vez el script y el
+         meta refresh (extensiones, navegadores endurecidos), sigue habiendo algo
+         en pantalla y un enlace que funciona. Sin esto vería una página vacía. -->
+    <p>
+      Te estamos llevando al aviso de privacidad de Ferddo.<br />
+      Si no ocurre nada, <a href="../#/privacidad">ábrelo aquí</a>.
+    </p>
+  </body>
+</html>

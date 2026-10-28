@@ -1,0 +1,79 @@
+name: Deploy a GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un solo deploy a la vez: con dos push seguidos, el segundo cancela al primero
+# en lugar de publicar dos builds pisándose el artefacto.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        # `npm ci` y no `npm install`: respeta el lockfile al pie de la letra,
+        # así el build del CI es el mismo que el de tu máquina.
+        run: npm ci
+
+      # Los íconos NO se versionan: se derivan de public/logo.png en cada build,
+      # de modo que cambiar la marca es cambiar un solo archivo. Si el logo no
+      # está (repo recién clonado), el script avisa y sale con éxito para no
+      # tumbar el despliegue.
+      - name: Generar íconos PWA desde el logo
+        run: npm run icons
+
+      - name: Build
+        env:
+          # OJO: todo lo que empieza por VITE_ acaba DENTRO de dist/ y es
+          # público. Aquí van como "secrets" solo para no fijar el proyecto
+          # Supabase en el repo, no porque sean secretos de verdad.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_APP_NAME: ${{ secrets.VITE_APP_NAME }}
+          VITE_PUBLIC_URL: ${{ secrets.VITE_PUBLIC_URL }}
+          # Prefijo del build. Por defecto '/', que es lo correcto en un dominio
+          # propio y en una "user/org page". Para una "project page"
+          # (https://usuario.github.io/mi-repo/) define el secret VITE_BASE con
+          # el valor '/mi-repo/': el prefijo y el dominio se cortan juntos, y
+          # equivocarlo deja la app en pantalla en blanco.
+          VITE_BASE: ${{ secrets.VITE_BASE || '/' }}
+          # VITE_ROUTER se deja VACÍO a propósito → HashRouter (#/items).
+          # GitHub Pages no sabe reescribir rutas a index.html, así que con
+          # BrowserRouter cualquier enlace profundo o F5 devuelve un 404 del
+          # propio Pages. Las URL limpias son para Vercel (ver vercel.json).
+        run: npm run build
+
+      - name: Subir artefacto
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publicar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
