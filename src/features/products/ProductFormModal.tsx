@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ImagePlus, Plus, Trash2 } from 'lucide-react'
+import { ImagePlus, Layers, Plus, Trash2 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Field, Input, Textarea } from '@/components/ui/Input'
@@ -81,12 +81,21 @@ const orNull = (v: string) => v.trim() || null
 export function ProductFormModal({
   product,
   products,
+  isComposite = false,
+  onOpenRecipe,
   onClose,
 }: {
   /** null = alta. */
   product: Product | null
   /** Catálogo completo, para elegir el producto "padre" de una variante. */
   products: Product[]
+  /** El producto tiene receta: no lleva existencia propia y su costo sale de ella. */
+  isComposite?: boolean
+  /**
+   * Abre la receta / kit en su propio modal (cierra este). Solo llega si se
+   * puede: edición, `products.manage`, módulo de inventario y sin variantes.
+   */
+  onOpenRecipe?: () => void
   onClose: () => void
 }) {
   const toast = useToast()
@@ -117,7 +126,7 @@ export function ProductFormModal({
     handleSubmit,
     watch,
     setValue,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -245,8 +254,9 @@ export function ProductFormModal({
       cost: parseDecimal(v.cost) ?? 0,
       price: parseDecimal(v.price) ?? 0,
       tax_id: orNull(v.tax_id),
-      track_stock: !isService && v.track_stock,
-      min_stock: !isService && v.track_stock ? (parseDecimal(v.min_stock) ?? 0) : 0,
+      // Un compuesto nunca lleva existencia propia (save_product_components la apaga).
+      track_stock: !isService && !isComposite && v.track_stock,
+      min_stock: !isService && !isComposite && v.track_stock ? (parseDecimal(v.min_stock) ?? 0) : 0,
       duration_minutes: isService && v.duration_minutes.trim() ? Number(v.duration_minutes) : null,
       description: orNull(v.description),
       image_url: imageUrl,
@@ -385,7 +395,7 @@ export function ProductFormModal({
 
         {/* Precios */}
         <div className="grid gap-4 rounded-2xl border border-slate-200 p-4 sm:grid-cols-3">
-          <Field label="Costo" error={errors.cost?.message}>
+          <Field label="Costo" error={errors.cost?.message} hint={isComposite ? 'Se recalcula al guardar la receta.' : undefined}>
             <Input {...register('cost')} inputMode="decimal" placeholder="0.00" />
           </Field>
           <Field
@@ -411,7 +421,11 @@ export function ProductFormModal({
         </div>
 
         {/* Inventario / servicio */}
-        {kind === 'product' ? (
+        {kind === 'product' && isComposite ? (
+          <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Producto compuesto: no lleva existencia propia; al venderse descuenta sus componentes del inventario.
+          </p>
+        ) : kind === 'product' ? (
           <div className="space-y-4">
             <label className="flex items-start gap-3">
               <input type="checkbox" {...register('track_stock')} className="mt-0.5 h-5 w-5 rounded border-slate-300 text-brand-600" />
@@ -477,6 +491,22 @@ export function ProductFormModal({
             </Field>
           )}
         </div>
+
+        {onOpenRecipe && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-slate-700">Receta / kit (producto compuesto)</p>
+              <p className="text-xs text-slate-500">
+                Al venderse descuenta sus componentes del inventario; el producto no lleva existencia propia.
+              </p>
+              {/* El modal de la receta reemplaza a este: lo no guardado se perdería. */}
+              {isDirty && <p className="mt-1 text-xs font-medium text-amber-700">Guarda antes los cambios de este formulario.</p>}
+            </div>
+            <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={onOpenRecipe} disabled={isDirty || busy}>
+              <Layers className="h-4 w-4" /> {isComposite ? 'Editar receta' : 'Definir receta'}
+            </Button>
+          </div>
+        )}
 
         <Field label="Descripción">
           <Textarea {...register('description')} rows={3} />

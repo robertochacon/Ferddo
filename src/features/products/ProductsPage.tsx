@@ -5,6 +5,7 @@ import {
   Download,
   History,
   ImageOff,
+  Layers,
   ListOrdered,
   Package,
   Pencil,
@@ -29,7 +30,7 @@ import { useToast } from '@/components/ui/toast'
 import { useAuth } from '@/auth/AuthProvider'
 import { useBranches, useCategories, useProducts, useTaxes } from '@/hooks/core'
 import { useAllStock } from '@/hooks/inventory'
-import { useUpdateProduct } from '@/hooks/products'
+import { useCompositeProductIds, useUpdateProduct } from '@/hooks/products'
 import { downloadCsv, toCsv } from '@/lib/csv'
 import { errorMessage } from '@/lib/errors'
 import { money } from '@/lib/format'
@@ -39,6 +40,7 @@ import { ProductFormModal } from './ProductFormModal'
 import { CategoriesModal } from './CategoriesModal'
 import { ImportProductsModal } from './ImportProductsModal'
 import { PriceListsModal } from './PriceListsModal'
+import { ProductComponentsModal } from './ProductComponentsModal'
 import {
   STOCK_STATUS,
   fmtQty,
@@ -63,7 +65,9 @@ const STOCK_TEXT: Record<StockStatus, string> = {
 }
 
 /** Lo que se ve en la columna de existencia, según el tipo de artículo. */
-function StockCell({ p, qty }: { p: Product; qty: number }) {
+function StockCell({ p, qty, composite }: { p: Product; qty: number; composite: boolean }) {
+  // Un compuesto no tiene existencia propia: sale de la de sus componentes.
+  if (composite) return <span className="text-xs text-slate-400">Por receta</span>
   if (p.kind === 'service') return <span className="text-slate-400">—</span>
   if (!p.track_stock) return <span className="text-xs text-slate-400">Sin control</span>
   return (
@@ -103,6 +107,7 @@ export function ProductsPage() {
   const { data: taxes = [] } = useTaxes()
   const { data: branches = [] } = useBranches()
   const { data: allStock = [] } = useAllStock()
+  const { data: composites } = useCompositeProductIds()
   const update = useUpdateProduct()
 
   const [search, setSearch] = useState('')
@@ -118,6 +123,7 @@ export function ProductsPage() {
   const [showCategories, setShowCategories] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showPriceLists, setShowPriceLists] = useState(false)
+  const [recipeOf, setRecipeOf] = useState<Product | null>(null)
 
   const products = useMemo(() => productsQ.data ?? [], [productsQ.data])
 
@@ -133,6 +139,10 @@ export function ProductsPage() {
   const categoryName = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c.name])), [categories])
   const taxById = useMemo(() => Object.fromEntries(taxes.map((t) => [t.id, t])), [taxes])
   const productName = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p.name])), [products])
+  // Un producto con variantes no puede ser compuesto (lo rechaza la base): ni se ofrece.
+  const parentIds = useMemo(() => new Set(products.map((p) => p.parent_id).filter(Boolean)), [products])
+  // Las recetas descuentan inventario: sin el módulo no tienen efecto.
+  const canRecipe = canManage && hasModule('inventory')
 
   const filtered = useMemo(() => {
     const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
@@ -208,6 +218,14 @@ export function ProductsPage() {
         tone: p.is_active ? 'danger' : 'success',
         hint: p.is_active ? 'Deja de venderse; el historial se conserva' : undefined,
         onClick: () => void toggleActive(p),
+      })
+    }
+    if (canRecipe && !parentIds.has(p.id)) {
+      items.push({
+        label: 'Receta / kit',
+        icon: <Layers className="h-4 w-4" />,
+        hint: composites?.has(p.id) ? 'Editar sus componentes' : 'Convertir en producto compuesto',
+        onClick: () => setRecipeOf(p),
       })
     }
     if (canSeeInventory && p.track_stock) {
@@ -363,6 +381,7 @@ export function ProductsPage() {
                 <tbody className="divide-y divide-slate-50">
                   {slice.map((p) => {
                     const qty = stockOf[p.id] ?? 0
+                    const isComposite = Boolean(composites?.has(p.id))
                     const items = actionsFor(p)
                     return (
                       <tr key={p.id} className={cn('hover:bg-slate-50/60', !p.is_active && 'opacity-60')}>
@@ -390,10 +409,10 @@ export function ProductsPage() {
                           <MarginText p={p} rate={p.tax_id ? (taxById[p.tax_id]?.rate ?? 0) : 0} includesTax={tenant?.prices_include_tax ?? true} />
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <StockCell p={p} qty={qty} />
+                          <StockCell p={p} qty={qty} composite={isComposite} />
                         </td>
                         <td className="px-4 py-3">
-                          <Badges p={p} qty={qty} />
+                          <Badges p={p} qty={qty} composite={isComposite} />
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end">{items.length > 0 && <ActionMenu title={productLabel(p)} items={items} />}</div>
@@ -408,6 +427,7 @@ export function ProductsPage() {
             <DataList>
               {slice.map((p) => {
                 const qty = stockOf[p.id] ?? 0
+                const isComposite = Boolean(composites?.has(p.id))
                 const items = actionsFor(p)
                 return (
                   <DataRow
@@ -417,14 +437,14 @@ export function ProductsPage() {
                     titleExtra={[p.sku && `SKU ${p.sku}`, p.barcode].filter(Boolean).join(' · ') || undefined}
                     onClick={canManage ? () => setEditing(p) : undefined}
                     tone={p.is_active ? undefined : 'muted'}
-                    badges={<Badges p={p} qty={qty} />}
+                    badges={<Badges p={p} qty={qty} composite={isComposite} />}
                     actions={items.length > 0 ? <ActionMenu title={productLabel(p)} items={items} /> : undefined}
                   >
                     <DataFields cols={3}>
                       <DataField label="Precio">{money(p.price, currency)}</DataField>
                       <DataField label="Costo">{money(p.cost, currency)}</DataField>
                       <DataField label="Existencia">
-                        <StockCell p={p} qty={qty} />
+                        <StockCell p={p} qty={qty} composite={isComposite} />
                       </DataField>
                     </DataFields>
                   </DataRow>
@@ -441,12 +461,22 @@ export function ProductsPage() {
           key={editing?.id ?? 'new'}
           product={editing}
           products={products}
+          isComposite={Boolean(editing && composites?.has(editing.id))}
+          onOpenRecipe={
+            editing && canRecipe && !parentIds.has(editing.id)
+              ? () => {
+                  setRecipeOf(editing)
+                  setEditing(null)
+                }
+              : undefined
+          }
           onClose={() => {
             setCreating(false)
             setEditing(null)
           }}
         />
       )}
+      {recipeOf && <ProductComponentsModal key={recipeOf.id} product={recipeOf} products={products} onClose={() => setRecipeOf(null)} />}
       {showCategories && <CategoriesModal products={products} onClose={() => setShowCategories(false)} />}
       {showImport && <ImportProductsModal onClose={() => setShowImport(false)} />}
       {showPriceLists && <PriceListsModal products={products} onClose={() => setShowPriceLists(false)} />}
@@ -454,7 +484,7 @@ export function ProductsPage() {
   )
 }
 
-function Badges({ p, qty }: { p: Product; qty: number }) {
+function Badges({ p, qty, composite }: { p: Product; qty: number; composite: boolean }) {
   const st = p.track_stock ? stockStatus(qty, p.min_stock) : null
   return (
     <div className="flex flex-wrap items-center gap-1">
@@ -465,6 +495,11 @@ function Badges({ p, qty }: { p: Product; qty: number }) {
       ) : (
         <Badge tone="slate">
           <Boxes className="h-3 w-3" /> Producto
+        </Badge>
+      )}
+      {composite && (
+        <Badge tone="brand">
+          <Layers className="h-3 w-3" /> Compuesto
         </Badge>
       )}
       {!p.is_active && <Badge tone="slate">Inactivo</Badge>}

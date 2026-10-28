@@ -838,3 +838,42 @@ export interface WorkOrderAdvance {
   created_by: string | null
   created_at: string
 }
+
+// ── Productos compuestos (0025) ─────────────────────────────────────────────
+
+/** Componente de una receta o kit: cantidad por UNA unidad vendida. */
+export interface ProductComponent {
+  id: string
+  tenant_id: string
+  product_id: string
+  component_id: string
+  quantity: number
+  created_at: string
+  updated_at: string
+}
+
+// ── Citas (0026) ────────────────────────────────────────────────────────────
+
+export type AppointmentStatus = 'scheduled' | 'confirmed' | 'in_progress' | 'done' | 'canceled' | 'no_show'
+
+export interface Appointment {
+  id: string
+  tenant_id: string
+  branch_id: string
+  customer_id: string | null
+  contact_name: string | null
+  contact_phone: string | null
+  /** Profesional (miembro del equipo); null = sin asignar. */
+  staff_id: string | null
+  service_id: string | null
+  title: string
+  starts_at: string
+  ends_at: string
+  status: AppointmentStatus
+  notes: string | null
+  cancel_reason: string | null
+  sale_id: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}

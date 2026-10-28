@@ -40,6 +40,7 @@ export type ModuleCode =
   | 'reports'
   | 'restaurant'
   | 'workshop'
+  | 'appointments'
 
 // ── Tablas del núcleo ───────────────────────────────────────────────────────
 

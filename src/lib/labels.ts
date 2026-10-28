@@ -6,6 +6,7 @@ import type {
   CashMovementKind,
   DocumentStatus,
   KitchenStatus,
+  AppointmentStatus,
   WorkOrderStatus,
   EcfStatus,
   ExpenseStatus,
@@ -58,6 +59,7 @@ export const MODULE_LABEL: Record<ModuleCode, string> = {
   reports: 'Reportes',
   restaurant: 'Restaurante (mesas y comandas)',
   workshop: 'Taller (órdenes de trabajo)',
+  appointments: 'Citas y agenda',
 }
 
 export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
@@ -134,6 +136,15 @@ export const WORK_ORDER_STATUS: Record<WorkOrderStatus, { label: string; tone: T
   done: { label: 'Terminada', tone: 'green' },
   delivered: { label: 'Entregada', tone: 'slate' },
   canceled: { label: 'Cancelada', tone: 'red' },
+}
+
+export const APPOINTMENT_STATUS: Record<AppointmentStatus, { label: string; tone: Tone }> = {
+  scheduled: { label: 'Agendada', tone: 'slate' },
+  confirmed: { label: 'Confirmada', tone: 'brand' },
+  in_progress: { label: 'En atención', tone: 'amber' },
+  done: { label: 'Atendida', tone: 'green' },
+  canceled: { label: 'Cancelada', tone: 'red' },
+  no_show: { label: 'No asistió', tone: 'slate' },
 }
 
 export const INVENTORY_KIND_LABEL: Record<InventoryMovementKind, string> = {

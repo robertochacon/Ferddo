@@ -5,6 +5,7 @@ import {
   Banknote,
   Boxes,
   Building2,
+  CalendarDays,
   ChefHat,
   UtensilsCrossed,
   Wrench,
@@ -80,8 +81,9 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'Restaurante y taller',
+    label: 'Servicios especializados',
     items: [
+      { to: '/citas', label: 'Citas', icon: CalendarDays, modules: ['appointments'] },
       { to: '/mesas', label: 'Mesas y cuentas', icon: UtensilsCrossed, modules: ['restaurant'], perm: 'restaurant.orders' },
       { to: '/cocina', label: 'Cocina', icon: ChefHat, modules: ['restaurant'], perm: 'restaurant.kitchen' },
       { to: '/taller', label: 'Órdenes de trabajo', icon: Wrench, modules: ['workshop'], perm: 'workshop.manage' },

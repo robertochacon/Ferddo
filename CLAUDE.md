@@ -114,7 +114,7 @@ raise exception 'PLAN_LIMIT_PRODUCTS: El plan % permite máximo % productos. Act
 - Prefijos en uso: `PLAN_LIMIT_PRODUCTS`, `PLAN_LIMIT_MEMBERS`, `PLAN_LIMIT_BRANCHES`,
   `PLAN_LIMIT_REGISTERS`, `PLAN_LIMIT_ECF`, `PLAN_LIMIT_MODULE`; además `FORBIDDEN`,
   `SUBSCRIPTION_EXPIRED`, `CASH_SESSION_REQUIRED`, `CREDIT_LIMIT`, `STOCK_INSUFFICIENT`,
-  `ECF_*`. Uno nuevo sigue el patrón `MARCA_EN_MAYUSCULAS: mensaje`.
+  `APPOINTMENT_OVERLAP`, `ECF_*`. Uno nuevo sigue el patrón `MARCA_EN_MAYUSCULAS: mensaje`.
 - El prefijo existe **para que el código lo reconozca**, no para enseñárselo a
   nadie: `errorMessage()` (`src/lib/errors.ts`) recorta hasta los primeros dos
   puntos y pinta solo el texto amigable.

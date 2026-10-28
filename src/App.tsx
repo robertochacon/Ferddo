@@ -118,6 +118,9 @@ const WorkOrdersPage = lazyWithRetry(() =>
 const WorkOrderDetailPage = lazyWithRetry(() =>
   import('@/features/workshop/WorkOrderDetailPage').then((m) => ({ default: m.WorkOrderDetailPage })),
 )
+const AppointmentsPage = lazyWithRetry(() =>
+  import('@/features/appointments/AppointmentsPage').then((m) => ({ default: m.AppointmentsPage })),
+)
 const ReportsPage = lazyWithRetry(() =>
   import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })),
 )
@@ -321,6 +324,7 @@ export default function App() {
             <Route path="taller" element={<WorkOrdersPage />} />
             <Route path="taller/nueva" element={<WorkOrderDetailPage />} />
             <Route path="taller/:id" element={<WorkOrderDetailPage />} />
+            <Route path="citas" element={<AppointmentsPage />} />
             <Route path="configuracion" element={<SettingsPage />} />
             <Route path="perfil" element={<ProfilePage />} />
           </Route>

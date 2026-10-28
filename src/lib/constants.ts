@@ -98,7 +98,7 @@ export const PLANS: Record<PlanCode, PlanInfo> = {
     maxEcfMonthly: 1000,
     modules: [
       'pos', 'inventory', 'cash', 'credit', 'invoicing', 'purchases',
-      'expenses', 'payables', 'quotations', 'reports',
+      'expenses', 'payables', 'quotations', 'reports', 'restaurant', 'workshop', 'appointments',
     ],
     isOffered: true,
     isFeatured: true,
@@ -110,6 +110,8 @@ export const PLANS: Record<PlanCode, PlanInfo> = {
       'Cotizaciones',
       'Reportes avanzados',
       '2 sucursales · 5 usuarios',
+      'Módulos de restaurante y taller',
+      'Agenda de citas',
     ],
   },
   enterprise: {
@@ -130,7 +132,6 @@ export const PLANS: Record<PlanCode, PlanInfo> = {
       'Todo lo del plan Negocio',
       'Sucursales y usuarios ilimitados',
       'e-CF sin tope mensual',
-      'Módulos de restaurante y taller',
       'Soporte prioritario',
     ],
   },

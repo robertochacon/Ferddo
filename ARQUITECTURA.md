@@ -482,7 +482,13 @@ Revisar cada pantalla a 360 px.
 ['inventory', …] ['sales', filtros] ['sales','detail',id] ['cash', …] ['pos', …]
 ['purchases', …] ['expenses', …] ['quotations', …] ['ecf', …] ['reports', …]
 ['team','members'] ['team','invites'] ['team','role-permissions']
+['products','components', productId] ['products','composites']   (recetas/kits, 0025)
+['appointments','list', {from,to,staffId}]                           (citas, 0026)
 ```
+Las dos de compuestos cuelgan de `['products']` a propósito: cualquier mutación del
+catálogo que invalida `['products']` las refresca también.
+Las citas cuelgan de `['appointments']`: las mutaciones `appt_*` invalidan esa raíz (y
+`['dashboard']`); el cobro, además, todo lo de una venta (`invalidateAfterSaleChange`).
 `['dashboard']` sigue siendo el comodín que invalida toda mutación que mueve cifras.
 
 ### 7.12 Hooks — `src/hooks/`
@@ -492,6 +498,11 @@ core.ts      lecturas compartidas del ERP (useBranches, useRegisters, useTaxes, 
 settings.ts  sucursales, cajas, impuestos
 pos.ts sales.ts cash.ts products.ts inventory.ts customers.ts receivables.ts suppliers.ts
 purchases.ts payables.ts expenses.ts quotations.ts invoicing.ts reports.ts  (uno por módulo)
+products.ts  …además useProductComponents(id), useCompositeProductIds() (Set vía select),
+             useSaveProductComponents() → RPC save_product_components (reemplaza la receta)
+appointments.ts useAppointments({from,to,staffId?}) (rango por solape, orden por inicio),
+             useSaveAppointment() → appt_save, useSetAppointmentStatus() → appt_set_status,
+             useCheckoutAppointment() → appt_checkout (idempotente por client_uid; kickEcfQueue)
 tenant.ts    useUpdateTenant()
 profile.ts   useUpdateProfile(), useChangePassword(), useChangeEmail(), useSignOutOthers()
 items.ts     useItems(), useItem(id), useCreateItem(), useUpdateItem(), useDeleteItem()

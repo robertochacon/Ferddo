@@ -68,9 +68,9 @@ auth.users ──< tenant_members >── tenants ──< branches ──< cash_
 | 4 e-CF | Configuración fiscal por empresa, secuencias e-NCF, documentos y eventos, cola con reintentos, interfaz `ElectronicInvoiceProvider`, simulador, notas de crédito por devolución, almacenamiento cifrado de credenciales | **En progreso** — núcleo listo; proveedor real **Bloqueado** (ver §6) |
 | 5 Mini ERP | Compras (borrador→orden→recepción), cuentas por pagar, gastos, cotizaciones y conversión a venta, cuentas por cobrar con antigüedad | **Completado** |
 | 6 Reportes | Tablero, ventas por día/producto/categoría/vendedor/sucursal/método, ITBIS, gastos, valoración de inventario, exportación CSV | **Completado** |
-| 7 Administración SaaS | Planes Básico/Negocio/Empresa con límites y módulos configurables, historial de suscripción, suspensión controlada por vencimiento, panel global agregado | **Completado** (pasarela de pago **Pendiente**) |
-| 8 Especializados | Restaurante (áreas, mesas, cuentas, comandas, pantalla de cocina, dividir/unir cuentas, 10 % de ley) y taller (vehículos/equipos, órdenes de trabajo, cotización, anticipos, facturación) sobre el mismo `create_sale` | **Completado** (citas **Pendiente**) |
-| 9 Comercial avanzado | Listas de precios por cliente, recepción parcial de compras | **Completado** (productos compuestos **Pendiente**) |
+| 7 Administración SaaS | Planes Básico/Negocio/Empresa con límites y módulos configurables (Negocio incluye restaurante, taller y citas desde la 0025–0026), historial de suscripción, suspensión controlada por vencimiento, panel global agregado | **Completado** (pasarela de pago **Pendiente**) |
+| 8 Especializados | Restaurante (áreas, mesas, cuentas, comandas, pantalla de cocina, dividir/unir cuentas, 10 % de ley) y taller (vehículos/equipos, órdenes de trabajo, cotización, anticipos, facturación) sobre el mismo `create_sale`; citas y agenda por profesional (sin solapes, cobro por `create_sale`, recordatorio por WhatsApp) | **Completado** |
+| 9 Comercial avanzado | Listas de precios por cliente, recepción parcial de compras, productos compuestos (recetas y kits que descuentan componentes) | **Completado** |
 
 ## 4. Migraciones
 
@@ -88,8 +88,11 @@ auth.users ──< tenant_members >── tenants ──< branches ──< cash_
 | `0020_expense_paid_sync` | Al saldar la cuenta por pagar de un gasto, el gasto pasa a pagado. |
 | `0021_phase8_enums` | `payment_method 'advance'`, `cash_movement_kind 'advance'`, estados de cocina, cuentas y órdenes de trabajo. |
 | `0022_restaurant_workshop` | Restaurante y taller completos + `sales.service_charge` (10 % de ley) + `create_sale` con anticipos validados contra la orden de trabajo. |
-| `0024_workshop_advance_refunds` | Devolución de anticipos de taller (sale de caja abierta; deja de contar como disponible). |
 | `0023_price_lists_partial_receipts` | Listas de precios (`price_lines` con 5.º parámetro, `preview_totals` con cliente) y recepción parcial (`purchase_receipts`, `received_qty`, una cuenta por pagar por recepción). |
+| `0024_workshop_advance_refunds` | Devolución de anticipos de taller (sale de caja abierta; deja de contar como disponible). |
+| `0025_negocio_modules_composite_products` | Plan Negocio con restaurante y taller. Productos compuestos: `product_components`, `save_product_components()`, triggers en `sale_items` (costo por receta y salida de componentes) y `sale_return_items` (reingreso proporcional a lo que salió); el índice de "un movimiento por línea" incluye el producto. |
+| `0026_appointments` | Módulo de citas: `appointments` con exclusión `btree_gist` (un profesional no se solapa), `appt_save`, `appt_set_status`, `appt_checkout` (vía `create_sale`), permiso `appointments.manage`; activado en consultorio, oficina profesional y servicios, y en el plan Negocio. |
+| `0027_composite_component_message` | Mensaje correcto al usar un compuesto como componente. |
 
 Todas aplicadas en el proyecto Supabase **Ferddo Saas** (`zhqhwqkmdlhnmtrhgner`).
 Ninguna es destructiva sobre datos reales (la base estaba vacía).
@@ -146,11 +149,11 @@ Ninguna es destructiva sobre datos reales (la base estaba vacía).
 
 | Prueba | Comando | Qué cubre |
 |---|---|---|
-| Integración de base de datos | `npm run test:db` (`supabase/tests/erp_integration.sql` + `phase8_integration.sql`) | 71 + 25 aserciones (todas en verde), además de las comprobaciones de error. Núcleo: aislamiento entre empresas, permisos por rol, multiempresa, venta idempotente, ITBIS, pago mixto, crédito y límite, abonos y conciliación, devoluciones, anulación, kardex = existencia, e-CF (secuencias, e-NCF, nota de crédito, cola exclusiva de service_role, veredicto final inmutable), compras y costo promedio, cuentas por pagar, cotización→venta sin duplicar, gastos, arqueo, tablero, ITBIS, límites de plan y módulo, suscripción vencida, privacidad del super-admin, purga completa. Corre en una transacción que se revierte: no deja datos. |
+| Integración de base de datos | `npm run test:db` (`supabase/tests/erp_integration.sql` + `phase8_integration.sql` + `phase9_integration.sql`) | 71 + 26 + 20 aserciones (todas en verde), además de las comprobaciones de error. Núcleo: aislamiento entre empresas, permisos por rol, multiempresa, venta idempotente, ITBIS, pago mixto, crédito y límite, abonos y conciliación, devoluciones, anulación, kardex = existencia, e-CF (secuencias, e-NCF, nota de crédito, cola exclusiva de service_role, veredicto final inmutable), compras y costo promedio, cuentas por pagar, cotización→venta sin duplicar, gastos, arqueo, tablero, ITBIS, límites de plan y módulo, suscripción vencida, privacidad del super-admin, purga completa. Fase 9: recetas (costo, salida de componentes, devolución con receta cambiada, sin reingreso, anulación, sin anidar), citas (módulo y permiso, solape por profesional, cancelada libera el horario, transiciones, cobro idempotente atribuido al profesional). Corre en una transacción que se revierte: no deja datos. |
 | Unitarias del cálculo | `npm test` | Espejo TS de `price_lines()` con los mismos casos que la prueba SQL. |
 | Tipos | `npm run lint` | `tsc -b --noEmit` estricto. |
 | Build | `npm run build` | Bundle de producción. |
-| Humo en navegador | Playwright sobre `vite preview` | Landing, login, registro y legales a 1366 px y 360 px: sin errores de ejecución ni scroll horizontal; rutas protegidas redirigen al login. Recorrido con sesión en la web publicada (2026-10-28). Restaurante: abrir caja → abrir cuenta en Mesa 1 → 2 platos + 3 cervezas → enviar a cocina → la cocina (rol cocina) marca listo → cobro con 10 % de ley (RD$1,440 + RD$122.03 = RD$1,562.03) → e-CF 32 aceptado automáticamente por el simulador. Taller: cambio de empresa, lista y formulario de orden; sin scroll horizontal a 360 px en /taller, /mesas y /cocina. POS: registro → onboarding (colmado) → producto con existencia inicial → abrir caja → venta en efectivo con devuelta → existencia 10→9 → caja con esperado correcto; POS, ventas, productos, configuración y e-CF a 360 px sin scroll horizontal. Datos de prueba purgados después. |
+| Humo en navegador | Playwright sobre `vite preview` | Landing, login, registro y legales a 1366 px y 360 px: sin errores de ejecución ni scroll horizontal; rutas protegidas redirigen al login. Recorrido con sesión en la web publicada (2026-10-28). Restaurante: abrir caja → abrir cuenta en Mesa 1 → 2 platos + 3 cervezas → enviar a cocina → la cocina (rol cocina) marca listo → cobro con 10 % de ley (RD$1,440 + RD$122.03 = RD$1,562.03) → e-CF 32 aceptado automáticamente por el simulador. Taller: cambio de empresa, lista y formulario de orden; sin scroll horizontal a 360 px en /taller, /mesas y /cocina. POS: registro → onboarding (colmado) → producto con existencia inicial → abrir caja → venta en efectivo con devuelta → existencia 10→9 → caja con esperado correcto; POS, ventas, productos, configuración y e-CF a 360 px sin scroll horizontal. Datos de prueba purgados después. Citas (`/citas`): agenda del día, vista por profesional, alta, cobro y enlace de WhatsApp a 360 px y 1366 px sin scroll horizontal, con la API de Supabase simulada en Playwright (pendiente el recorrido con sesión real). |
 
 Nunca usar el ambiente de producción de la DGII para pruebas.
 
@@ -165,7 +168,7 @@ Nunca usar el ambiente de producción de la DGII para pruebas.
 
 ## 10. Frontend entregado
 
-Pantallas (todas con permisos y módulos, tabla en `lg` y lista en móvil): Inicio/tablero, POS táctil, Ventas y detalle (reimpresión, anulación, devolución), Caja (apertura, entradas/salidas, arqueo, cierre, historial), Productos y servicios (variantes, categorías, imagen, CSV), Inventario (existencias, kardex, ajustes, transferencias, conteos, valoración), Clientes y estado de cuenta, Cuentas por cobrar (antigüedad, abonos), Proveedores, Compras (borrador→orden→recepción con pago), Cuentas por pagar, Gastos, Cotizaciones (impresión/PDF y conversión al POS), Facturación e-CF (comprobantes, configuración, secuencias, guía DGII), Reportes (CSV), Configuración (empresa y módulos, sucursales y cajas, impuestos, equipo, roles y permisos, plan y consumo), Perfil (mis empresas), Onboarding por tipo de negocio, Panel global, Landing.
+Pantallas (todas con permisos y módulos, tabla en `lg` y lista en móvil): Inicio/tablero, POS táctil, Ventas y detalle (reimpresión, anulación, devolución), Caja (apertura, entradas/salidas, arqueo, cierre, historial), Productos y servicios (variantes, categorías, imagen, CSV, listas de precios, receta/kit de compuestos), Inventario (existencias, kardex, ajustes, transferencias, conteos, valoración), Clientes y estado de cuenta, Cuentas por cobrar (antigüedad, abonos), Proveedores, Compras (borrador→orden→recepción con pago), Cuentas por pagar, Gastos, Cotizaciones (impresión/PDF y conversión al POS), Facturación e-CF (comprobantes, configuración, secuencias, guía DGII), Reportes (CSV), Configuración (empresa y módulos, sucursales y cajas, impuestos, equipo, roles y permisos, plan y consumo), Perfil (mis empresas), Onboarding por tipo de negocio, Panel global, Landing. Servicios especializados: Citas (agenda semanal por profesional, cobro, recordatorio por WhatsApp), Mesas, Cocina y Taller.
 
 Limitaciones conocidas: archivos reemplazados en Storage (imágenes, adjuntos abandonados) no se borran; el historial de compras del cliente depende de `sales.view_all`; el certificado .p12 no se inspecciona (solo se cifra y guarda).
 
@@ -183,5 +186,5 @@ Limitaciones conocidas: archivos reemplazados en Storage (imágenes, adjuntos ab
 2. Desplegar la Edge Function `ecf` y su cron; SMTP propio.
 3. Pasarela de pago para suscripciones (Edge Function + webhook firmado, idempotente).
 5. Agente local de impresión ESC/POS; estudio del POS offline.
-6. Productos compuestos (recetas/kits que descuentan componentes), citas para consultorios y servicios.
+6. ~~Productos compuestos y citas~~ hechos (0025–0027). Siguiente en citas: recordatorios automáticos (correo/WhatsApp Business API) y reserva pública en línea.
 7. Reportar el 10 % de ley y los anticipos en el e-CF según el formato del proveedor elegido.

@@ -1,8 +1,8 @@
-import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { uploadFile } from '@/lib/storage'
 import { useAuth } from '@/auth/AuthProvider'
-import type { Category, Product } from '@/types/erp'
+import type { Category, Product, ProductComponent } from '@/types/erp'
 
 /*
  * Escrituras del catálogo (productos, servicios y categorías). Las lecturas
@@ -166,6 +166,93 @@ export function useDeleteCategory() {
       void qc.invalidateQueries({ queryKey: ['categories'] })
       void qc.invalidateQueries({ queryKey: ['products'] })
       void qc.invalidateQueries({ queryKey: ['inventory', 'valuation'] })
+    },
+  })
+}
+
+// ── Productos compuestos (recetas y kits, 0025) ─────────────────────────────
+
+/*
+ * Un compuesto no lleva existencia propia: al venderse, triggers de la base
+ * descuentan sus componentes (y las devoluciones/anulaciones los reponen). La
+ * tabla es de solo lectura por RLS; se escribe entera con
+ * save_product_components(), que también apaga track_stock y fija el costo.
+ * Las claves cuelgan de ['products'] a propósito: cualquier cambio de catálogo
+ * (invalidateCatalog) las refresca sin tener que acordarse de ellas.
+ */
+
+/** Componentes de un producto. Sin id no hay consulta (formulario de alta). */
+export function useProductComponents(productId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['products', 'components', productId],
+    enabled: Boolean(productId),
+    queryFn: async (): Promise<ProductComponent[]> => {
+      const { data, error } = await supabase
+        .from('product_components')
+        .select('*')
+        .eq('product_id', productId!)
+        .order('created_at')
+      if (error) throw error
+      // numeric llega como string desde PostgREST.
+      return ((data ?? []) as ProductComponent[]).map((c) => ({ ...c, quantity: Number(c.quantity) }))
+    },
+  })
+}
+
+// Fuera del hook para que la referencia sea estable y `select` memorice el Set.
+const toIdSet = (ids: string[]) => new Set(ids)
+
+/**
+ * Ids de los productos que SON compuestos, para marcarlos en el listado. Se
+ * guarda como arreglo (el cache se persiste en localStorage y un Set no
+ * sobrevive a JSON); el Set se arma en `select`.
+ */
+export function useCompositeProductIds() {
+  return useQuery({
+    queryKey: ['products', 'composites'],
+    queryFn: async (): Promise<string[]> => {
+      // Una fila por componente: con muchas recetas se pasa de las 1000 filas
+      // que corta PostgREST, así que se pagina como fetchAll de core.ts.
+      const PAGE = 1000
+      const ids = new Set<string>()
+      for (let page = 0; page < 20; page++) {
+        const { data, error } = await supabase
+          .from('product_components')
+          .select('product_id')
+          .order('id')
+          .range(page * PAGE, page * PAGE + PAGE - 1)
+        if (error) throw error
+        const rows = (data ?? []) as { product_id: string }[]
+        for (const r of rows) ids.add(r.product_id)
+        if (rows.length < PAGE) break
+      }
+      return [...ids]
+    },
+    select: toIdSet,
+  })
+}
+
+export interface ComponentLine {
+  component_id: string
+  quantity: number
+}
+
+/** Reemplaza la receta completa. Lista vacía = deja de ser compuesto. */
+export function useSaveProductComponents() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ productId, components }: { productId: string; components: ComponentLine[] }) => {
+      const { error } = await supabase.rpc('save_product_components', {
+        p_product: productId,
+        p_components: components,
+      })
+      if (error) throw error
+    },
+    // Cambia la receta, el costo y track_stock del producto: listados,
+    // existencias y la valoración del inventario quedan desfasados.
+    onSuccess: () => {
+      invalidateCatalog(qc)
+      void qc.invalidateQueries({ queryKey: ['inventory'] })
     },
   })
 }
