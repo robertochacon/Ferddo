@@ -2,7 +2,8 @@ import type { ModuleCode, PlanCode } from '@/types/db'
 import { money } from '@/lib/format'
 import { IS_HASH_ROUTER } from '@/lib/router'
 
-export const APP_NAME = import.meta.env.VITE_APP_NAME ?? 'Ferddo'
+// `||` y no `??`: en CI la variable existe pero puede llegar vacía.
+export const APP_NAME = import.meta.env.VITE_APP_NAME || 'Ferddo'
 export const APP_TAGLINE = 'POS, inventario y facturación electrónica'
 
 /**

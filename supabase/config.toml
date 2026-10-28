@@ -30,6 +30,11 @@ port = 54324
 enabled = true
 file_size_limit = "50MiB"
 
+# Los "vector buckets" son de pago; sin esto el CLI intenta activarlos en cada
+# `config push` y el proyecto gratuito lo rechaza con 402.
+[storage.vector]
+enabled = false
+
 [auth]
 enabled = true
 # Site URL del proyecto HOSTED: el dominio propio de producción, a donde
@@ -110,17 +115,23 @@ admin_email = "onboarding@resend.dev"
 sender_name = "Ferddo"
 
 # Plantillas de correo con la marca Ferddo (se aplican con SMTP configurado).
-[auth.email.template.confirmation]
-subject = "Confirma tu cuenta en Ferddo"
-content_path = "./supabase/templates/confirmation.html"
+# Plantillas de correo con la marca Ferddo (supabase/templates/*.html).
+# DESACTIVADAS a propósito: en el plan gratuito, Supabase rechaza TODO el
+# `config push` si cambia plantillas sin un SMTP propio ("Email template
+# modification is not available for free tier projects using the default email
+# provider"). Al configurar Resend (SMTP_PASSWORD + [auth.email.smtp] enabled =
+# true), quita los `#` de estos bloques y vuelve a empujar.
+# [auth.email.template.confirmation]
+# subject = "Confirma tu cuenta en Ferddo"
+# content_path = "./supabase/templates/confirmation.html"
 
-[auth.email.template.recovery]
-subject = "Restablece tu contraseña — Ferddo"
-content_path = "./supabase/templates/recovery.html"
+# [auth.email.template.recovery]
+# subject = "Restablece tu contraseña — Ferddo"
+# content_path = "./supabase/templates/recovery.html"
 
-[auth.email.template.magic_link]
-subject = "Tu enlace de acceso a Ferddo"
-content_path = "./supabase/templates/magic_link.html"
+# [auth.email.template.magic_link]
+# subject = "Tu enlace de acceso a Ferddo"
+# content_path = "./supabase/templates/magic_link.html"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Entrar / registrarse con Google.

@@ -35,14 +35,14 @@ export function welcomeEmail({ name, siteUrl }: { name: string; siteUrl: string 
         <td align="center">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 16px rgba(23,37,84,0.08);">
             <tr>
-              <td style="background:#172554;padding:26px;text-align:center;">
+              <td style="background:#0b2559;padding:26px;text-align:center;">
                 <span style="color:#ffffff;font-size:24px;font-weight:800;letter-spacing:-0.5px;">Ferddo</span>
-                <div style="color:#93c5fd;font-size:12px;margin-top:4px;">Administra tu negocio desde el celular</div>
+                <div style="color:#93c5fd;font-size:12px;margin-top:4px;">POS, inventario y facturación electrónica</div>
               </td>
             </tr>
             <tr>
               <td style="padding:32px 28px;">
-                <h1 style="margin:0 0 12px;font-size:20px;color:#172554;">${hello}</h1>
+                <h1 style="margin:0 0 12px;font-size:20px;color:#0b2559;">${hello}</h1>
                 <p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#334155;">
                   Tu cuenta ya está lista: no tienes que confirmar nada. Entra y
                   empieza a llevar tu negocio sin cuadernos ni hojas de cálculo.
@@ -66,7 +66,7 @@ export function welcomeEmail({ name, siteUrl }: { name: string; siteUrl: string 
             </tr>
             <tr>
               <td style="padding:16px 28px;background:#f8fafc;text-align:center;border-top:1px solid #e2e8f0;">
-                <span style="font-size:12px;color:#94a3b8;">Ferddo · Administra tu negocio desde el celular</span>
+                <span style="font-size:12px;color:#94a3b8;">Ferddo · POS, inventario y facturación electrónica</span>
               </td>
             </tr>
           </table>
