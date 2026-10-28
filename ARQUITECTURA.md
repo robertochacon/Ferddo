@@ -531,7 +531,7 @@ SMTP_PASSWORD, RESEND_API_KEY, PUBLIC_SITE_URL
 - alias `@`
 - `VitePWA` con `registerType:'autoUpdate'`, manifest, `globPatterns`
   incluyendo `assets/index-*.js` y `assets/vendor-*.js`,
-  `runtimeCaching`: (a) `CacheFirst` `app-assets` para
+  `globPatterns` incluye **todos** los `assets/*.js` (Ferddo: la regla `CacheFirst` de chunks lazy colgaba la primera visita al tomar control el SW; ver vite.config.ts). Antes: `runtimeCaching`: (a) `CacheFirst` `app-assets` para
   `request.destination==='script' && sameOrigin && pathname.includes('/assets/')`;
   (b) `NetworkFirst` `supabase-read` para GET a `/(rest|storage)/` de supabase.
 - `manualChunks`: `vendor` = react, react-dom, react-router, @tanstack, @supabase,
@@ -605,7 +605,7 @@ docs    README.md CLAUDE.md ARQUITECTURA.md (este archivo)
 ## 12. Trampas ya pagadas — respétalas o las repites
 
 1. **`clsx` fuera de `vendor`** ⇒ pantalla en blanco antes de React. Ver §9.
-2. **Chunks lazy sin `CacheFirst`** ⇒ tras un deploy, import fallido y app muerta.
+2. **Chunks lazy fuera del precache** ⇒ tras un deploy, import fallido y app muerta. Ferddo los precachea todos (la regla `CacheFirst` en tiempo de ejecución colgaba la primera visita).
    Mitigado además con `lazyWithRetry` + `ErrorBoundary`.
 3. **Inputs < 16 px en iOS** ⇒ zoom automático al enfocar. En `index.css`,
    `@media (max-width: 640px) { input, select, textarea { font-size: 16px !important } }`.

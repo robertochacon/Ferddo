@@ -372,7 +372,7 @@ Están en `ARQUITECTURA.md` §12 con detalle. El resumen y el porqué:
 1. **`clsx` tiene que ir en el chunk `vendor`** (`vite.config.ts` → `manualChunks`).
    Si cae en un chunk que el service worker no precachea, la app no llega ni a
    montar React: pantalla en blanco, sin error en pantalla.
-2. **Los chunks *lazy* van con `CacheFirst`.** Tras un deploy, el `index.html`
+2. **Los chunks *lazy* van en el precache** (antes `CacheFirst` en tiempo de ejecución, que colgaba la primera visita cuando el service worker tomaba el control). Tras un deploy, el `index.html`
    cacheado pide chunks que ya no existen. Mitigado además por `lazyWithRetry`
    (una recarga, una sola vez, con guard en `sessionStorage`) y el `ErrorBoundary`.
 3. **Inputs a 16 px en móvil** (`src/index.css`, con `!important`). Por debajo,
