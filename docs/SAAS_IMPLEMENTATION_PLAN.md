@@ -88,6 +88,7 @@ auth.users ──< tenant_members >── tenants ──< branches ──< cash_
 | `0020_expense_paid_sync` | Al saldar la cuenta por pagar de un gasto, el gasto pasa a pagado. |
 | `0021_phase8_enums` | `payment_method 'advance'`, `cash_movement_kind 'advance'`, estados de cocina, cuentas y órdenes de trabajo. |
 | `0022_restaurant_workshop` | Restaurante y taller completos + `sales.service_charge` (10 % de ley) + `create_sale` con anticipos validados contra la orden de trabajo. |
+| `0024_workshop_advance_refunds` | Devolución de anticipos de taller (sale de caja abierta; deja de contar como disponible). |
 | `0023_price_lists_partial_receipts` | Listas de precios (`price_lines` con 5.º parámetro, `preview_totals` con cliente) y recepción parcial (`purchase_receipts`, `received_qty`, una cuenta por pagar por recepción). |
 
 Todas aplicadas en el proyecto Supabase **Ferddo Saas** (`zhqhwqkmdlhnmtrhgner`).
@@ -133,6 +134,7 @@ Ninguna es destructiva sobre datos reales (la base estaba vacía).
 
 | Riesgo | Mitigación |
 |---|---|
+| Primera visita lenta por el service worker | Registro diferido (`src/lib/pwa.ts`) y precache mínimo; medido en la web publicada |
 | Plazo DGII inminente (15/11/2026) | Priorizar el adaptador del proveedor autorizado (§6.1) |
 | Serialización de ventas por empresa (secuencia interna con candado de fila) | Aceptable para pymes; si crece, numerar por sucursal/caja |
 | Catálogos > 20 000 productos (lectura completa en el POS) | Pasar a búsqueda de servidor con el índice trigram ya creado |
@@ -148,7 +150,7 @@ Ninguna es destructiva sobre datos reales (la base estaba vacía).
 | Unitarias del cálculo | `npm test` | Espejo TS de `price_lines()` con los mismos casos que la prueba SQL. |
 | Tipos | `npm run lint` | `tsc -b --noEmit` estricto. |
 | Build | `npm run build` | Bundle de producción. |
-| Humo en navegador | Playwright sobre `vite preview` | Landing, login, registro y legales a 1366 px y 360 px: sin errores de ejecución ni scroll horizontal; rutas protegidas redirigen al login. Recorrido con sesión en la web publicada (2026-10-28): registro → onboarding (colmado) → producto con existencia inicial → abrir caja → venta en efectivo con devuelta → existencia 10→9 → caja con esperado correcto; POS, ventas, productos, configuración y e-CF a 360 px sin scroll horizontal. Datos de prueba purgados después. |
+| Humo en navegador | Playwright sobre `vite preview` | Landing, login, registro y legales a 1366 px y 360 px: sin errores de ejecución ni scroll horizontal; rutas protegidas redirigen al login. Recorrido con sesión en la web publicada (2026-10-28). Restaurante: abrir caja → abrir cuenta en Mesa 1 → 2 platos + 3 cervezas → enviar a cocina → la cocina (rol cocina) marca listo → cobro con 10 % de ley (RD$1,440 + RD$122.03 = RD$1,562.03) → e-CF 32 aceptado automáticamente por el simulador. Taller: cambio de empresa, lista y formulario de orden; sin scroll horizontal a 360 px en /taller, /mesas y /cocina. POS: registro → onboarding (colmado) → producto con existencia inicial → abrir caja → venta en efectivo con devuelta → existencia 10→9 → caja con esperado correcto; POS, ventas, productos, configuración y e-CF a 360 px sin scroll horizontal. Datos de prueba purgados después. |
 
 Nunca usar el ambiente de producción de la DGII para pruebas.
 
