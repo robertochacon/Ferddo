@@ -101,11 +101,13 @@ enable_confirmations = false
 # La clave se pasa como variable de entorno al hacer el push:
 #   SMTP_PASSWORD="re_..." supabase config push
 [auth.email.smtp]
-# APAGADO hasta tener SMTP_PASSWORD: un `config push` con la variable vacía
-# dejaría el SMTP roto y ningún correo de Auth saldría. Mientras tanto Supabase
-# usa su remitente compartido (pocos correos por hora). Enciéndelo al configurar
-# Resend y empuja SIEMPRE con la variable en el entorno.
-enabled = false
+# Resend. Empuja SIEMPRE con la clave en el entorno:
+#   SMTP_PASSWORD="re_..." supabase config push
+# Sin ella el push dejaría la contraseña vacía y ningún correo de Auth saldría.
+# OJO: con el remitente de pruebas onboarding@resend.dev, Resend SOLO entrega al
+# correo dueño de la cuenta; para clientes reales verifica un dominio en Resend y
+# cambia admin_email (y WELCOME_FROM de la función `welcome`).
+enabled = true
 host = "smtp.resend.com"
 port = 465
 user = "resend"
@@ -114,46 +116,22 @@ pass = "env(SMTP_PASSWORD)"
 admin_email = "onboarding@resend.dev"
 sender_name = "Ferddo"
 
-# Plantillas de correo con la marca Ferddo (se aplican con SMTP configurado).
-# Plantillas de correo con la marca Ferddo (supabase/templates/*.html).
-# DESACTIVADAS a propósito: en el plan gratuito, Supabase rechaza TODO el
-# `config push` si cambia plantillas sin un SMTP propio ("Email template
-# modification is not available for free tier projects using the default email
-# provider"). Al configurar Resend (SMTP_PASSWORD + [auth.email.smtp] enabled =
-# true), quita los `#` de estos bloques y vuelve a empujar.
-# [auth.email.template.confirmation]
-# subject = "Confirma tu cuenta en Ferddo"
-# content_path = "./supabase/templates/confirmation.html"
+# Plantillas con la marca Ferddo (requieren el SMTP propio de arriba en el plan gratuito).
+[auth.email.template.confirmation]
+subject = "Confirma tu cuenta en Ferddo"
+content_path = "./supabase/templates/confirmation.html"
 
-# [auth.email.template.recovery]
-# subject = "Restablece tu contraseña — Ferddo"
-# content_path = "./supabase/templates/recovery.html"
+[auth.email.template.recovery]
+subject = "Restablece tu contraseña — Ferddo"
+content_path = "./supabase/templates/recovery.html"
 
-# [auth.email.template.magic_link]
-# subject = "Tu enlace de acceso a Ferddo"
-# content_path = "./supabase/templates/magic_link.html"
+[auth.email.template.magic_link]
+subject = "Tu enlace de acceso a Ferddo"
+content_path = "./supabase/templates/magic_link.html"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Entrar / registrarse con Google.
 #
-# El intercambio con Google lo hace el SERVIDOR de Supabase, no el navegador:
-# Google redirige SIEMPRE a https://<PROJECT-REF>.supabase.co/auth/v1/callback
-# (ese es el "Authorized redirect URI" que hay que registrar en Google Cloud
-# Console) y desde ahí Supabase devuelve a la app, al `redirectTo` que se le
-# pasó — que debe casar con site_url o con additional_redirect_urls de arriba.
-# Por eso el acceso con Google NO añade ninguna variable VITE_ al frontend.
 #
-# ⚠️ ESTE BLOQUE TIENE QUE EXISTIR aunque ya hayas activado el proveedor a mano
-# en el panel: `supabase config push` sincroniza el archivo COMPLETO, así que
-# sin él el push APAGARÍA Google. Y por el mismo motivo que SMTP_PASSWORD, un
-# push sin estas dos variables en el entorno dejaría las credenciales vacías y
-# tumbaría el acceso. Las tres van en la misma orden:
-#   SMTP_PASSWORD="re_..." \
-#   SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID="....apps.googleusercontent.com" \
-#   SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET="GOCSPX-..." \
-#     supabase config push
 #
-# Si no vas a ofrecer Google, pon `enabled = false` pero DEJA el bloque.
 [auth.external.google]
 # Apagado hasta registrar el cliente OAuth de Google para este proyecto.
 enabled = false
