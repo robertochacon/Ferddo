@@ -51,15 +51,15 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // TODOS los chunks JS se precachean (≈2–3 MB). Antes solo iban el entry y
-        // `vendor`, y las rutas lazy se servían con una regla CacheFirst en
-        // tiempo de ejecución; en la PRIMERA visita, cuando el service worker
-        // toma el control a mitad de sesión (clientsClaim), esas peticiones se
-        // quedaban colgadas y la app se atascaba en "Cargando…" (reproducido
-        // 2 de 4 veces en la web publicada; 0 de 5 sin service worker).
-        // Precacheadas, las sirve el precache versionado: también offline y
-        // también tras un deploy (el index viejo apunta a chunks de SU precache).
-        globPatterns: ['**/*.{css,html,ico,png,svg,woff2}', 'assets/*.js'],
+        // Precache MÍNIMO: lo justo para que la app monte sin red (entry,
+        // `vendor`, CSS, HTML e íconos). Los chunks de cada pantalla se guardan
+        // al visitarla (regla CacheFirst de abajo). Probado en la web publicada:
+        // precachear los ~90 archivos (2.5 MB) competía con las descargas de la
+        // primera visita y dejaba pantallas hasta 5 s en "Cargando…". El
+        // registro del service worker además se difiere (src/lib/pwa.ts).
+        // Imágenes grandes (logo fuente, og.png, logotipo) fuera: no hacen falta
+        // para operar sin conexión.
+        globPatterns: ['**/*.{css,html,ico,woff2}', 'icons/*.png', 'assets/index-*.js', 'assets/vendor-*.js'],
         // Los redirectores de las URL limpias no se precachean: solo sirven
         // cuando NO hay service worker (con él, toda navegación cae en
         // index.html y de /privacidad se encarga src/lib/cleanPaths.ts).
@@ -68,6 +68,18 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [
+          {
+            // Chunks JS de las pantallas (rutas lazy), con hash = inmutables:
+            // CacheFirst es seguro y deja disponible offline lo ya visitado.
+            urlPattern: ({ url, request, sameOrigin }) =>
+              request.destination === 'script' && sameOrigin && url.pathname.includes('/assets/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'app-assets',
+              expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             // Lecturas GET de Supabase (REST y Storage): NetworkFirst da datos
             // frescos con red y el último valor conocido cuando no la hay.
