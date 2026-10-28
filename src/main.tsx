@@ -17,6 +17,7 @@ import { persister, registerOfflineMutations, resumeIfAuthed } from '@/lib/offli
 import { AuthProvider } from '@/auth/AuthProvider'
 import { ToastProvider } from '@/components/ui/toast'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { registerServiceWorkerWhenIdle } from '@/lib/pwa'
 
 // Los defaults de las mutaciones offline se registran ANTES de montar la app:
 // las que quedaron en cola se rehidratan durante el arranque y solo se pueden
@@ -78,3 +79,5 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>,
 )
+
+registerServiceWorkerWhenIdle()

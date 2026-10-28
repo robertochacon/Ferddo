@@ -23,6 +23,11 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registro MANUAL y diferido (src/lib/pwa.ts): con el registro automático
+      // el service worker descargaba su precache (~2.5 MB) en el arranque y
+      // competía con los chunks de la primera pantalla; en GitHub Pages la
+      // navegación inicial tardaba hasta 5 s en "Cargando…".
+      injectRegister: false,
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icons/*.png'],
       manifest: {
         name: 'Ferddo',
