@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { functionsUrl, supabase } from '@/lib/supabase'
 import { dayStartIso, addDays } from '@/hooks/reports'
 import type {
@@ -281,6 +281,22 @@ export interface EcfProcessSummary {
 }
 
 /** "Procesar cola ahora": envía/consulta los pendientes de la empresa activa. */
+/**
+ * Despierta el procesador justo después de una venta o devolución con e-CF,
+ * sin esperar al cron. Es fire-and-forget A PROPÓSITO: la venta ya está
+ * guardada y su e-CF en `pending`; si esto falla (sin red, función caída), el
+ * cron o el botón "Procesar cola ahora" lo recogen después. Nunca debe
+ * bloquear ni ensuciar con errores el flujo de caja.
+ */
+export function kickEcfQueue(qc: QueryClient): void {
+  callEcf<EcfProcessSummary>('process', {})
+    .then(() => {
+      qc.invalidateQueries({ queryKey: ['ecf'] })
+      qc.invalidateQueries({ queryKey: ['sales'] })
+    })
+    .catch(() => {})
+}
+
 export function useProcessEcfQueue() {
   const qc = useQueryClient()
   return useMutation({

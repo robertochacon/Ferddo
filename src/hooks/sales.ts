@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { newClientUid } from '@/lib/labels'
+import { kickEcfQueue } from '@/hooks/invoicing'
 import type {
   Customer,
   ElectronicInvoice,
@@ -314,7 +315,11 @@ export function useReturnSale() {
       const r = (data ?? {}) as ReturnSaleResult
       return { ...r, total: r.total == null ? undefined : Number(r.total) }
     },
-    onSuccess: () => invalidateAfterSaleChange(qc),
+    onSuccess: (r) => {
+      invalidateAfterSaleChange(qc)
+      // Devolución de una venta con e-CF ⇒ nota de crédito (34) en cola.
+      if (r.ecf) kickEcfQueue(qc)
+    },
   })
 }
 

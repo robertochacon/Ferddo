@@ -166,8 +166,8 @@ Limitaciones conocidas: archivos reemplazados en Storage (imágenes, adjuntos ab
 ## 11. Pendiente de configuración externa
 
 - ~~`supabase config push`~~ aplicado (URLs de GitHub Pages, sin confirmación por correo). Plantillas de correo: requieren SMTP propio en el plan gratuito.
-- Desplegar la función `welcome` (correo de bienvenida; hoy falla en silencio por CORS al no existir).
-- `supabase functions deploy ecf` + secretos `FISCAL_ENC_KEY`, `ECF_CRON_SECRET` + programar `/ecf/cron`.
+- ~~`supabase functions deploy ecf`~~ desplegada (2026-10-28) y probada de punta a punta contra el simulador: venta con e-CF 32 → `pending` → `sent` → `accepted` con código de seguridad (y `rejected` con RNC de emisor inválido); el POS la despierta tras cada venta/devolución con e-CF. Faltan los secretos `FISCAL_ENC_KEY` (para cargar certificados/credenciales) y `ECF_CRON_SECRET` + programar `/ecf/cron` como respaldo.
+- Secretos de la función `welcome` (`RESEND_API_KEY`, `PUBLIC_SITE_URL`, `WELCOME_FROM`); SMTP de Auth ya activo con Resend (remitente de pruebas).
 - Primer super-admin: `scripts/grant-platform-admin.sql`.
 - Términos y condiciones: completar razón social, dirección y plazos de conservación (marcadores `<Todo>`).
 

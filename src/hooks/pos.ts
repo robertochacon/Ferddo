@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/auth/AuthProvider'
 import { invalidateAfterSaleChange } from '@/hooks/sales'
+import { kickEcfQueue } from '@/hooks/invoicing'
 import type {
   CreateSaleResult,
   EcfStatus,
@@ -67,8 +68,9 @@ export function useCreateSale() {
         ecf: ecf ? { ...ecf, status: ecf.status as EcfStatus, simulated: Boolean(ecf.simulated) } : null,
       }
     },
-    onSuccess: (_r, payload) => {
+    onSuccess: (r, payload) => {
       invalidateAfterSaleChange(qc)
+      if (r.ecf && !r.replayed) kickEcfQueue(qc)
       if (payload.quotation_id) qc.invalidateQueries({ queryKey: ['quotations'] })
     },
   })
