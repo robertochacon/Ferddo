@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -21,6 +21,10 @@ const schema = z.object({
 })
 
 type FormValues = z.infer<typeof schema>
+
+// `import()` y no import estático: en `vite build` DEV es `false`, la rama se
+// elimina y el módulo (con las credenciales de .env.local) no se emite en dist.
+const DevQuickLogin = import.meta.env.DEV ? lazy(() => import('./DevQuickLogin')) : null
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -133,6 +137,12 @@ export function LoginPage() {
         <AuthDivider />
         <GoogleButton label="Continuar con Google" />
       </div>
+
+      {DevQuickLogin && (
+        <Suspense fallback={null}>
+          <DevQuickLogin />
+        </Suspense>
+      )}
     </AuthLayout>
   )
 }

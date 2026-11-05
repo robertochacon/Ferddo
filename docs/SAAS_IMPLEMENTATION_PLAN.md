@@ -170,6 +170,8 @@ Nunca usar el ambiente de producción de la DGII para pruebas.
 
 Pantallas (todas con permisos y módulos, tabla en `lg` y lista en móvil): Inicio/tablero, POS táctil, Ventas y detalle (reimpresión, anulación, devolución), Caja (apertura, entradas/salidas, arqueo, cierre, historial), Productos y servicios (variantes, categorías, imagen, CSV, listas de precios, receta/kit de compuestos), Inventario (existencias, kardex, ajustes, transferencias, conteos, valoración), Clientes y estado de cuenta, Cuentas por cobrar (antigüedad, abonos), Proveedores, Compras (borrador→orden→recepción con pago), Cuentas por pagar, Gastos, Cotizaciones (impresión/PDF y conversión al POS), Facturación e-CF (comprobantes, configuración, secuencias, guía DGII), Reportes (CSV), Configuración (empresa y módulos, sucursales y cajas, impuestos, equipo, roles y permisos, plan y consumo), Perfil (mis empresas), Onboarding por tipo de negocio, Panel global, Landing. Servicios especializados: Citas (agenda semanal por profesional, cobro, recordatorio por WhatsApp), Mesas, Cocina y Taller.
 
+Acceso rápido de desarrollo (2026-11-04): con `npm run dev` el login muestra «Entrar como admin» (super-admin) y «Entrar como usuario» (cuenta con negocio), con credenciales de `.env.local` (`VITE_DEV_ADMIN_*`, `VITE_DEV_USER_*`). `src/pages/auth/DevQuickLogin.tsx` se carga con `import()` detrás de `import.meta.env.DEV`: en `vite build` no se emite (comprobado: ni el módulo ni las credenciales aparecen en `dist/`).
+
 Limitaciones conocidas: archivos reemplazados en Storage (imágenes, adjuntos abandonados) no se borran; el historial de compras del cliente depende de `sales.view_all`; el certificado .p12 no se inspecciona (solo se cifra y guarda).
 
 ## 11. Pendiente de configuración externa

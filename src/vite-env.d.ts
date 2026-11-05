@@ -19,6 +19,15 @@ interface ImportMetaEnv {
    * en Supabase (un botón que siempre falla no es una opción).
    */
   readonly VITE_GOOGLE_AUTH?: string
+  /**
+   * Cuentas del acceso rápido del login (src/pages/auth/DevQuickLogin.tsx).
+   * Solo se leen con `npm run dev`; en `vite build` el módulo no se emite.
+   * Van en `.env.local`, nunca en `.env.example`.
+   */
+  readonly VITE_DEV_ADMIN_EMAIL?: string
+  readonly VITE_DEV_ADMIN_PASSWORD?: string
+  readonly VITE_DEV_USER_EMAIL?: string
+  readonly VITE_DEV_USER_PASSWORD?: string
 }
 
 interface ImportMeta {
