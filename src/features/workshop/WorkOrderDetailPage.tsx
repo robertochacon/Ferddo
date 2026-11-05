@@ -654,6 +654,8 @@ function WorkOrderScreen({ id }: { id: string | undefined }) {
                     placeholder="Filtrar por nombre, documento o teléfono…"
                     className="mb-2"
                     aria-label="Filtrar clientes"
+                    // id propio: la etiqueta «Cliente» del Field es del desplegable, no del filtro.
+                    id="wo-customer-filter"
                   />
                 )}
                 <Select value={header.customer_id} disabled={!editable} onChange={(e) => chooseCustomer(e.target.value)}>

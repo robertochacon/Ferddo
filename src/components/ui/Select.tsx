@@ -1,5 +1,6 @@
 import { forwardRef, type SelectHTMLAttributes } from 'react'
 import { cn } from '@/lib/cn'
+import { useFieldControl } from './fieldContext'
 
 /**
  * Desplegable nativo con la flecha dibujada por nosotros.
@@ -13,7 +14,8 @@ import { cn } from '@/lib/cn'
  * abre la rueda del sistema, que es más cómoda que cualquier lista nuestra.
  */
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
-  function Select({ className, children, ...props }, ref) {
+  function Select({ className, children, ...rest }, ref) {
+    const props = useFieldControl(rest)
     return (
       <select
         ref={ref}

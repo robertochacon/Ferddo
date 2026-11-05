@@ -529,6 +529,9 @@ Button.tsx      export const Button  (forwardRef; variant: primary|secondary|out
                                       size: sm|md|lg|icon, loading?: boolean)
 Card.tsx        export function Card, CardHeader({title,subtitle,action}), CardBody
 Input.tsx       export const Input, Textarea (forwardRef); export function Field({label,hint,error,required,children})
+                  Field asocia SOLO su etiqueta, pista y error al control (fieldContext.ts): Input/Textarea/Select
+                  toman el id, aria-describedby, aria-invalid y aria-required. Un segundo control dentro del
+                  mismo Field (un filtro) lleva un `id` propio + aria-label para no duplicar el id.
 Select.tsx      export const Select (forwardRef)
 Modal.tsx       export function Modal({open,onClose,title,children,footer,size?})
 Badge.tsx       export function Badge({tone: 'brand'|'green'|'amber'|'red'|'slate', children})

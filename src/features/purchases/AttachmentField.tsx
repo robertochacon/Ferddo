@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { Paperclip, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { useFieldControl } from '@/components/ui/fieldContext'
 import { useToast } from '@/components/ui/toast'
 import { useOpenAttachment, useUploadAttachment, type AttachmentFolder } from '@/hooks/purchases'
 import { errorMessage } from '@/lib/errors'
@@ -27,6 +28,9 @@ export function AttachmentField({
   const input = useRef<HTMLInputElement>(null)
   const upload = useUploadAttachment(folder)
   const openFile = useOpenAttachment()
+  // La etiqueta del <Field> apunta a la entrada de archivo (oculta): tocar
+  // «Comprobante» abre el selector. Los botones ya se anuncian con su texto.
+  const fieldProps = useFieldControl({})
 
   const onFile = async (file: File | undefined) => {
     if (!file) return
@@ -42,6 +46,7 @@ export function AttachmentField({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <input
+        {...fieldProps}
         ref={input}
         type="file"
         accept="image/*,application/pdf"

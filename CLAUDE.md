@@ -34,6 +34,11 @@ registro, OAuth, recuperación), que hablan con `supabase.auth`, no con datos.
 - UI solo con las primitivas de `src/components/ui/`. Clases con `cn()`
   (`@/lib/cn`). Variantes por **objeto de lookup**, nunca ternarios encadenados.
 - `forwardRef` + `...props` en cualquier primitiva que envuelva un elemento HTML.
+- **Formularios accesibles:** envuelve cada control en `<Field label=…>`; la etiqueta,
+  la pista y el error se asocian solos a `Input`/`Textarea`/`Select` (no hace falta
+  `htmlFor`). Si un Field lleva DOS controles, dale al secundario un `id` propio y
+  un `aria-label`. Un control propio que no use las primitivas llama
+  `useFieldControl()` (`src/components/ui/fieldContext.ts`).
 
 **Regla móvil (no negociable).** Ningún listado puede exigir scroll horizontal en
 el teléfono:

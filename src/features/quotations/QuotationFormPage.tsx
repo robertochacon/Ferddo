@@ -434,6 +434,9 @@ function QuotationForm() {
                     onChange={(e) => setCustomerSearch(e.target.value)}
                     placeholder="Filtrar clientes…"
                     className="mb-2"
+                    aria-label="Filtrar clientes"
+                    // id propio: la etiqueta «Cliente» del Field es del desplegable, no del filtro.
+                    id="quote-customer-filter"
                   />
                 )}
                 <Select

@@ -1,10 +1,13 @@
 import {
   forwardRef,
+  useId,
+  useMemo,
   type InputHTMLAttributes,
   type ReactNode,
   type TextareaHTMLAttributes,
 } from 'react'
 import { cn } from '@/lib/cn'
+import { FieldContext, useFieldControl } from './fieldContext'
 
 /*
  * Los campos miden 44px (h-11) y usan `text-sm`. En móvil, `index.css` fuerza
@@ -12,7 +15,8 @@ import { cn } from '@/lib/cn'
  * iOS hace zoom automático al enfocar y la pantalla queda descuadrada.
  */
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
-  function Input({ className, ...props }, ref) {
+  function Input({ className, ...rest }, ref) {
+    const props = useFieldControl(rest)
     return (
       <input
         ref={ref}
@@ -30,7 +34,8 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 
 /** Mismo estilo que Input, para textos de varias líneas. */
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
-  function Textarea({ className, rows = 4, ...props }, ref) {
+  function Textarea({ className, rows = 4, ...rest }, ref) {
+    const props = useFieldControl(rest)
     return (
       <textarea
         ref={ref}
@@ -70,17 +75,29 @@ export function Field({
   children: ReactNode
   className?: string
 }) {
+  // La etiqueta nombra al control y la pista/el error lo describen: sin esta
+  // asociación un lector de pantalla anuncia «campo de edición» a secas. El id
+  // llega al control por contexto (ver fieldContext.ts); `htmlFor` explícito
+  // sigue mandando para quien ya lo pasaba.
+  const autoId = useId()
+  const id = htmlFor ?? autoId
+  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined
+  const control = useMemo(
+    () => ({ id, describedBy, invalid: Boolean(error), required: Boolean(required) }),
+    [id, describedBy, error, required],
+  )
   return (
     <div className={cn('space-y-1.5', className)}>
       {label && (
-        <label htmlFor={htmlFor} className="block text-sm font-medium text-slate-700">
+        <label htmlFor={id} className="block text-sm font-medium text-slate-700">
           {label}
-          {required && <span className="ml-0.5 text-red-500">*</span>}
+          {/* El asterisco es visual: la obligatoriedad la anuncia aria-required. */}
+          {required && <span aria-hidden="true" className="ml-0.5 text-red-500">*</span>}
         </label>
       )}
-      {children}
-      {hint && !error && <p className="text-xs text-slate-500">{hint}</p>}
-      {error && <p className="text-xs font-medium text-red-600">{error}</p>}
+      <FieldContext.Provider value={control}>{children}</FieldContext.Provider>
+      {hint && !error && <p id={`${id}-hint`} className="text-xs text-slate-500">{hint}</p>}
+      {error && <p id={`${id}-error`} className="text-xs font-medium text-red-600">{error}</p>}
     </div>
   )
 }
