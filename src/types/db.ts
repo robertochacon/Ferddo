@@ -210,8 +210,12 @@ export interface TenantAdminNote {
 export interface PlatformAdminRow {
   user_id: string
   email: string | null
+  /** `auth.users.raw_user_meta_data.full_name` (0030). */
+  full_name: string | null
+  /** Para qué está en el equipo: «Soporte», «Facturación»… */
   note: string | null
   created_at: string
+  last_sign_in_at: string | null
 }
 
 /** `admin_tenant_summary(p_tenant)` — uso del negocio visto desde fuera (agregados). */

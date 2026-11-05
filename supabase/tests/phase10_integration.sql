@@ -183,5 +183,18 @@ begin
                      'la purga no deja una línea por cada miembro');
   perform pg_temp.ok((select count(*) from platform_audit_logs where tenant_id = t) > 3, 'y la bitácora del negocio sobrevive');
 
+  -- ── Editar super-admins (0030) ────────────────────────────────────────────
+  perform pg_temp.act_as(ud);
+  perform public.admin_update_platform_admin(ud, '  Ana Soporte ', 'Soporte nivel 1');
+  perform pg_temp.ok(exists (select 1 from jsonb_array_elements(public.admin_list_platform_admins()) e
+                             where (e ->> 'user_id')::uuid = ud and e ->> 'full_name' = 'Ana Soporte'
+                               and e ->> 'note' = 'Soporte nivel 1'), 'nombre y nota editados (y recortados)');
+  perform pg_temp.ok(exists (select 1 from platform_audit_logs where action = 'platform_admin.update'
+                             and meta -> 'changes' ? 'full_name' and actor_id = ud), 'la edición queda en la bitácora');
+  perform pg_temp.expect_error($q$select public.admin_update_platform_admin('$q$ || ua || $q$', 'X', null)$q$, 'no es super-admin');
+  perform pg_temp.expect_error($q$select public.admin_update_platform_admin('$q$ || ud || $q$', repeat('x', 81), null)$q$, '80 caracteres');
+  perform pg_temp.act_as(ua);
+  perform pg_temp.expect_error($q$select public.admin_update_platform_admin('$q$ || ud || $q$', 'Intruso', null)$q$, 'No autorizado');
+
   raise exception 'FERDDO_TESTS_OK: % aserciones', current_setting('ferddo_test.count', true);
 end $$;

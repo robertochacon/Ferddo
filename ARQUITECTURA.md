@@ -242,6 +242,7 @@ admin_delete_tenant(p_tenant uuid, p_confirm_name text, p_delete_users boolean d
 admin_list_tenant_purges(p_limit integer default 20) returns jsonb
 admin_enter_tenant(p_tenant uuid, p_reason text) returns timestamptz   -- 0028, devuelve la caducidad
 admin_exit_tenant() returns void                                        -- 0028
+admin_update_platform_admin(p_user uuid, p_full_name text, p_note text) returns void  -- 0030, nombre y función; el correo no
 ```
 
 ### 3.5 Acceso de soporte («entrar como gestor», 0028)
@@ -622,6 +623,7 @@ Se entregan **los dos** destinos:
 0028_admin_support_audit_notes.sql  acceso de soporte (support_until), platform_audit_logs
                            + triggers, tenant_admin_notes, filtros del tope de miembros
 0029_support_revoke.sql    cortar el soporte (set_member_active) borra la fila y lo registra
+0030_edit_platform_admins.sql admin_update_platform_admin + nombre y último acceso en la lista
 ```
 Cada archivo abre con una cabecera `-- ═══ Ferddo · NNNN · <título> ═══` y
 explica **por qué** existe, no solo qué hace. Idempotente donde se pueda

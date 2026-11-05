@@ -39,6 +39,7 @@ const ACTIONS: Record<string, { label: string; tone: Tone; category: AuditCatego
   'user.unban': { label: 'Desbloqueó una cuenta', tone: 'green', category: 'users' },
   'platform_admin.grant': { label: 'Agregó un super-admin', tone: 'brand', category: 'platform' },
   'platform_admin.revoke': { label: 'Quitó un super-admin', tone: 'red', category: 'platform' },
+  'platform_admin.update': { label: 'Editó un super-admin', tone: 'brand', category: 'platform' },
 }
 
 export function auditAction(row: PlatformAuditRow): { label: string; tone: Tone; category: AuditCategory | null } {

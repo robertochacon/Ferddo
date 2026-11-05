@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Activity, AlertTriangle, ArrowRight, Ban, BellRing, Building2, Check, Eye, FileCheck2, LifeBuoy, LogIn,
-  LogOut, Play, Receipt, RefreshCw, Search, ShieldCheck, ShieldPlus, SlidersHorizontal, Store, Trash2,
+  Activity, AlertTriangle, ArrowRight, Ban, BellRing, Building2, Check, Eye, FileCheck2, LogIn,
+  Pencil, Play, Receipt, RefreshCw, Search, ShieldCheck, ShieldPlus, SlidersHorizontal, Store, Trash2,
   UserRound, Users,
 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthProvider'
@@ -11,24 +11,24 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
-import { Input } from '@/components/ui/Input'
+import { Field, Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { Pagination, paginate, usePaged, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
-import { Segmented } from '@/components/ui/Segmented'
 import { Select } from '@/components/ui/Select'
 import { StatCard } from '@/components/ui/StatCard'
 import { Avatar, EmptyState, PageLoader } from '@/components/ui/misc'
 import { useToast } from '@/components/ui/toast'
-import { APP_NAME, planOrderFrom, type PlanInfo } from '@/lib/constants'
+import { planOrderFrom, type PlanInfo } from '@/lib/constants'
 import { errorMessage } from '@/lib/errors'
-import { fmtDate, fmtDateShort, num } from '@/lib/format'
+import { fmtDate, fmtDateShort, fmtDateTime, num } from '@/lib/format'
 import {
   useAdminGrantPlatformAdmin, useAdminOverview, useAdminPlanRequests, useAdminPlatformAdmins,
-  useAdminResolvePlanRequest, useAdminRevokePlatformAdmin,
+  useAdminResolvePlanRequest, useAdminRevokePlatformAdmin, useAdminUpdatePlatformAdmin,
   useAdminSetTenantSuspended, useAdminTenantPurges, useAdminTenants,
 } from '@/hooks/admin'
 import { useBusinessTypes } from '@/hooks/core'
-import type { AdminPlanRequestRow, AdminTenantRow, PlanCode, SubscriptionStatus } from '@/types/db'
+import type { AdminPlanRequestRow, AdminTenantRow, PlanCode, PlatformAdminRow, SubscriptionStatus } from '@/types/db'
+import { ADMIN_SECTIONS, AdminShell, type AdminSection } from './AdminShell'
 import { AuditLogCard } from './AuditLogCard'
 import { DeleteTenantModal } from './DeleteTenantModal'
 import { EnterSupportModal } from './EnterSupportModal'
@@ -60,12 +60,6 @@ function useBusinessTypeLabels(): Record<string, string> {
 const TENANTS_PAGE_SIZE = DEFAULT_PAGE_SIZE
 const REQUESTS_PAGE_SIZE = DEFAULT_PAGE_SIZE
 
-type SectionId = 'resumen' | 'negocios' | 'planes' | 'bitacora' | 'equipo'
-const SECTIONS: { value: SectionId; label: string }[] = [
-  { value: 'resumen', label: 'Resumen' }, { value: 'negocios', label: 'Negocios' },
-  { value: 'planes', label: 'Planes' }, { value: 'bitacora', label: 'Bitácora' },
-  { value: 'equipo', label: 'Super-admins' },
-]
 
 /** Filtro de estado: los de la suscripción más «suspendido», que es del negocio. */
 type StatusFilter = SubscriptionStatus | 'suspended' | ''
@@ -75,7 +69,7 @@ const TRIAL_WARNING_DAYS = 7
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export function AdminPage() {
-  const { user, plans, signOut, tenant: supportTenant, exitSupport } = useAuth()
+  const { plans } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
   const overview = useAdminOverview()
@@ -96,15 +90,13 @@ export function AdminPage() {
   const [deleteFor, setDeleteFor] = useState<AdminTenantRow | null>(null)
 
   // La sección va en la URL (?s=negocios): así el botón «atrás» funciona y se
-  // puede compartir el enlace directo a una pestaña.
-  const [params, setParams] = useSearchParams()
-  const section = (params.get('s') ?? 'resumen') as SectionId
-  const setSection = (id: SectionId) => {
-    setParams(id === 'resumen' ? {} : { s: id })
-    // Sin esto la sección nueva hereda el scroll de la anterior y aparece «por
-    // la mitad».
-    window.scrollTo({ top: 0 })
-  }
+  // puede compartir el enlace directo a una sección. El menú (AdminShell) solo
+  // cambia la URL.
+  const [params] = useSearchParams()
+  const raw = params.get('s')
+  const section: AdminSection = ADMIN_SECTIONS.some((x) => x.id === raw) ? (raw as AdminSection) : 'resumen'
+  // Sin esto la sección nueva hereda el scroll de la anterior y aparece «por la mitad».
+  useEffect(() => window.scrollTo({ top: 0 }), [section])
 
   const typeLabels = useBusinessTypeLabels()
 
@@ -165,53 +157,18 @@ export function AdminPage() {
     requests.refetch()
   }
 
-  const handleSignOut = async () => {
-    await signOut()
-    navigate('/login')
-  }
-
-  // Mismo gris que el armazón de la app (ver Layout): sobre él las tarjetas
-  // blancas se despegan y la pantalla se lee como capas.
   return (
-    <div className="min-h-[100dvh] bg-slate-100">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4">
-          <span className="truncate text-lg font-extrabold tracking-tight text-brand-950">{APP_NAME}</span>
-          <Badge tone="brand" className="shrink-0">
-            <ShieldCheck className="h-3.5 w-3.5" /> Super-admin
-          </Badge>
-          <span className="ml-auto hidden min-w-0 truncate text-sm text-slate-500 lg:block">{user?.email}</span>
-          <Button variant="outline" size="sm" className="ml-auto lg:ml-0" onClick={refetchAll}>
-            <RefreshCw className="h-4 w-4" />
-            <span className="hidden sm:inline">Actualizar</span>
-          </Button>
-          <Button variant="ghost" size="icon" onClick={handleSignOut} aria-label="Cerrar sesión">
-            <LogOut className="h-5 w-5 text-red-600" />
-          </Button>
-        </div>
-      </header>
-
-      {/* Si se vuelve al panel sin salir del modo soporte, el acceso sigue
-          abierto: se recuerda aquí para que no quede olvidado hasta que caduque. */}
-      {supportTenant && (
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-amber-500 px-4 py-1.5 text-center text-xs font-semibold text-amber-950">
-          <span className="inline-flex items-center gap-1.5">
-            <LifeBuoy className="h-3.5 w-3.5" /> Sigues dentro de {supportTenant.name} en modo soporte
-          </span>
-          <button type="button" onClick={() => navigate('/')} className="rounded-md bg-amber-950/10 px-2 py-0.5 hover:bg-amber-950/20">
-            Volver al negocio
-          </button>
-          <button type="button" onClick={() => void exitSupport().catch((err) => toast.error(errorMessage(err)))}
-            className="rounded-md bg-amber-950/10 px-2 py-0.5 hover:bg-amber-950/20">
-            Salir del modo soporte
-          </button>
-        </div>
-      )}
-
-      <main className="mx-auto w-full max-w-6xl px-4 py-6">
-        <Segmented value={section} onChange={setSection} options={SECTIONS} label="Secciones del panel" />
-
-        <div className="mt-6">
+    <AdminShell
+      section={section}
+      title={ADMIN_SECTIONS.find((x) => x.id === section)?.label}
+      actions={
+        <Button variant="outline" size="sm" onClick={refetchAll}>
+          <RefreshCw className="h-4 w-4" />
+          <span className="hidden sm:inline">Actualizar</span>
+        </Button>
+      }
+    >
+        <div>
           {section === 'resumen' && (
             <>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -303,7 +260,6 @@ export function AdminPage() {
           {section === 'bitacora' && <AuditLogCard />}
           {section === 'equipo' && <SuperAdminsCard />}
         </div>
-      </main>
 
       <Modal open={Boolean(planFor)} onClose={() => setPlanForId(null)}
         title={planFor ? `Suscripción · ${planFor.name}` : 'Suscripción'}>
@@ -321,7 +277,7 @@ export function AdminPage() {
       <DeleteTenantModal tenantId={deleteFor?.id ?? null} tenantName={deleteFor?.name}
         onClose={() => setDeleteFor(null)} />
       <EnterSupportModal tenant={enterFor} onClose={() => setEnterFor(null)} />
-    </div>
+    </AdminShell>
   )
 }
 
@@ -679,22 +635,26 @@ function SuperAdminsCard() {
   const grant = useAdminGrantPlatformAdmin()
   const revoke = useAdminRevokePlatformAdmin()
   const [email, setEmail] = useState('')
+  const [note, setNote] = useState('')
+  const [editing, setEditing] = useState<PlatformAdminRow | null>(null)
 
   const add = async (e: FormEvent) => {
     e.preventDefault()
     try {
-      await grant.mutateAsync({ email })
+      await grant.mutateAsync({ email, note: note.trim() || undefined })
       toast.success('Super-admin agregado.')
       setEmail('')
+      setNote('')
     } catch (err) {
       toast.error(errorMessage(err, 'No se pudo agregar.'))
     }
   }
 
-  const remove = async (userId: string, label: string) => {
+  const remove = async (a: PlatformAdminRow) => {
+    const label = a.full_name ?? a.email ?? a.user_id
     if (!window.confirm(`¿Quitar a ${label} como super-admin?`)) return
     try {
-      await revoke.mutateAsync(userId)
+      await revoke.mutateAsync(a.user_id)
       toast.success('Super-admin removido.')
     } catch (err) {
       toast.error(errorMessage(err))
@@ -704,31 +664,52 @@ function SuperAdminsCard() {
   return (
     <Card>
       <CardHeader title="Super-admins de plataforma" subtitle="Cuentas con acceso a este panel (sin negocio propio)" />
-      <CardBody className="space-y-4">
-        {/* Sin paginar a propósito: son un puñado de cuentas, y una lista de tres
-            con paginador debajo se lee como si faltara algo. */}
-        {admins.isLoading ? (
-          <PageLoader label="Cargando…" />
-        ) : (
-          <ul className="space-y-2">
-            {(admins.data ?? []).map((a) => (
-              <li key={a.user_id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
-                <Avatar name={a.email} size="sm" />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{a.email ?? a.user_id}</span>
-                {a.user_id === user?.id && <Badge tone="brand">Tú</Badge>}
-                <Button variant="ghost" size="icon" className="shrink-0 text-red-600 hover:bg-red-50"
-                  aria-label={`Quitar a ${a.email ?? a.user_id}`}
-                  onClick={() => remove(a.user_id, a.email ?? a.user_id)}>
+      {/* Sin paginar a propósito: son un puñado de cuentas, y una lista de tres
+          con paginador debajo se lee como si faltara algo. */}
+      {admins.isLoading ? (
+        <PageLoader label="Cargando…" />
+      ) : admins.isError ? (
+        <p className="p-6 text-center text-sm text-red-600">{errorMessage(admins.error, 'No se pudieron cargar los super-admins.')}</p>
+      ) : (
+        <ul className="divide-y divide-slate-100 border-t border-slate-100">
+          {(admins.data ?? []).map((a) => (
+            <li key={a.user_id} className="flex items-center gap-3 px-4 py-3">
+              <Avatar name={a.full_name ?? a.email} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-slate-800">
+                  <span className="truncate">{a.full_name ?? a.email ?? a.user_id}</span>
+                  {a.user_id === user?.id && <Badge tone="brand">Tú</Badge>}
+                  {a.note && <Badge>{a.note}</Badge>}
+                </p>
+                {a.full_name && <p className="truncate text-xs text-slate-500">{a.email}</p>}
+                <p className="text-xs text-slate-400">
+                  {a.last_sign_in_at ? `Último acceso ${fmtDateTime(a.last_sign_in_at)}` : 'Nunca ha entrado'}
+                  {` · desde ${fmtDate(a.created_at)}`}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Button variant="ghost" size="icon" aria-label={`Editar a ${a.full_name ?? a.email ?? a.user_id}`}
+                  title="Editar" onClick={() => setEditing(a)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="text-red-600 hover:bg-red-50"
+                  aria-label={`Quitar a ${a.full_name ?? a.email ?? a.user_id}`} title="Quitar"
+                  onClick={() => void remove(a)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
-              </li>
-            ))}
-          </ul>
-        )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
-        <form onSubmit={add} className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+      <CardBody className="space-y-3 border-t border-slate-100">
+        <p className="text-sm font-semibold text-slate-800">Agregar super-admin</p>
+        <form onSubmit={add} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-            placeholder="correo@ejemplo.com" className="min-w-[220px] flex-1" />
+            placeholder="correo@ejemplo.com" aria-label="Correo" />
+          <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200}
+            placeholder="Función (opcional): Soporte, Facturación…" aria-label="Función" />
           <Button type="submit" loading={grant.isPending}>
             <ShieldPlus className="h-4 w-4" /> Agregar
           </Button>
@@ -741,6 +722,64 @@ function SuperAdminsCard() {
           al menos un super-admin: la base rechaza quitar al último.
         </p>
       </CardBody>
+
+      <EditAdminModal admin={editing} onClose={() => setEditing(null)} />
     </Card>
+  )
+}
+
+/**
+ * Nombre y función de un super-admin (admin_update_platform_admin, 0030). El
+ * correo se enseña pero no se edita: es su credencial de acceso.
+ */
+function EditAdminModal({ admin, onClose }: { admin: PlatformAdminRow | null; onClose: () => void }) {
+  const toast = useToast()
+  const update = useAdminUpdatePlatformAdmin()
+  const [fullName, setFullName] = useState('')
+  const [note, setNote] = useState('')
+
+  // Cada apertura parte de los datos de ESA cuenta, no de la anterior.
+  useEffect(() => {
+    setFullName(admin?.full_name ?? '')
+    setNote(admin?.note ?? '')
+  }, [admin])
+
+  const save = async (e?: FormEvent) => {
+    e?.preventDefault()
+    if (!admin) return
+    try {
+      await update.mutateAsync({ user: admin.user_id, fullName: fullName.trim() || null, note: note.trim() || null })
+      toast.success('Super-admin actualizado.')
+      onClose()
+    } catch (err) {
+      toast.error(errorMessage(err, 'No se pudo guardar.'))
+    }
+  }
+
+  return (
+    <Modal
+      open={Boolean(admin)}
+      onClose={onClose}
+      title="Editar super-admin"
+      size="sm"
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={() => void save()} loading={update.isPending}>Guardar</Button>
+        </>
+      }
+    >
+      <form onSubmit={save} className="space-y-4">
+        <Field label="Correo" hint="Es su acceso: no se cambia desde aquí.">
+          <Input value={admin?.email ?? ''} disabled readOnly />
+        </Field>
+        <Field label="Nombre">
+          <Input value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={80} placeholder="Nombre y apellido" />
+        </Field>
+        <Field label="Función" hint="Para que el equipo sepa quién es quién.">
+          <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="Soporte, Facturación…" />
+        </Field>
+      </form>
+    </Modal>
   )
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, Ban, Building2, Contact, CreditCard, FileCheck2, LifeBuoy, LogIn, Monitor, Package, Play, Receipt,
-  ShieldCheck, Store, Trash2, UserRound, Users,
+  Store, Trash2, UserRound, Users,
 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthProvider'
 import { ActionMenu, type ActionItem } from '@/components/ui/ActionMenu'
@@ -14,7 +14,6 @@ import { Select } from '@/components/ui/Select'
 import { StatCard } from '@/components/ui/StatCard'
 import { Avatar, EmptyState, PageLoader } from '@/components/ui/misc'
 import { useToast } from '@/components/ui/toast'
-import { APP_NAME } from '@/lib/constants'
 import { errorMessage } from '@/lib/errors'
 import { fmtDate, fmtDateTime, fmtTime, num } from '@/lib/format'
 import { ECF_STATUS, ROLE_LABEL } from '@/lib/labels'
@@ -26,6 +25,7 @@ import { useBusinessTypes } from '@/hooks/core'
 import type { AdminMember, MemberRole } from '@/types/db'
 import type { EcfStatus } from '@/types/erp'
 import { AuditLogCard } from './AuditLogCard'
+import { AdminShell } from './AdminShell'
 import { DeleteTenantModal } from './DeleteTenantModal'
 import { EnterSupportModal } from './EnterSupportModal'
 import { TenantNotesCard } from './TenantNotesCard'
@@ -55,7 +55,7 @@ const ENV_LABEL: Record<string, string> = {
 export function AdminTenantDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { user, plans } = useAuth()
+  const { plans } = useAuth()
   const [params] = useSearchParams()
   const summary = useAdminTenantSummary(id)
   const tenants = useAdminTenants()
@@ -83,18 +83,8 @@ export function AdminTenantDetail() {
   const ecfEntries = Object.entries(s?.ecf_by_status ?? {}).filter(([, n]) => Number(n) > 0)
 
   return (
-    <div className="min-h-[100dvh] bg-slate-100">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4">
-          <span className="truncate text-lg font-extrabold tracking-tight text-brand-950">{APP_NAME}</span>
-          <Badge tone="brand" className="shrink-0">
-            <ShieldCheck className="h-3.5 w-3.5" /> Super-admin
-          </Badge>
-          <span className="ml-auto hidden min-w-0 truncate text-sm text-slate-500 sm:block">{user?.email}</span>
-        </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-6xl px-4 py-6">
+    <AdminShell section="negocios" title="Ficha del negocio">
+      <div>
         <button
           onClick={() => navigate('/admin?s=negocios')}
           className="mb-4 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800"
@@ -263,7 +253,7 @@ export function AdminTenantDetail() {
         <p className="mt-6 text-center text-xs text-slate-400">
           Esta ficha muestra solo cifras agregadas. Para ver el negocio por dentro, «Entrar como gestor».
         </p>
-      </main>
+      </div>
 
       <Modal open={editingSub && Boolean(t)} onClose={() => setEditingSub(false)}
         title={t ? `Suscripción · ${t.name}` : 'Suscripción'}>
@@ -288,7 +278,7 @@ export function AdminTenantDetail() {
         // El negocio ya no existe: quedarse aquí dejaría una pantalla de huecos.
         onDeleted={() => navigate('/admin?s=negocios')}
       />
-    </div>
+    </AdminShell>
   )
 }
 

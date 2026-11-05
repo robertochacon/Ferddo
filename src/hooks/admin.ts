@@ -250,6 +250,26 @@ export function useAdminGrantPlatformAdmin() {
   })
 }
 
+/**
+ * Edita nombre y nota de un super-admin (0030). El correo no se toca aquí: es
+ * su credencial de acceso. `null` o vacío borra el campo. Queda en la bitácora.
+ */
+export function useAdminUpdatePlatformAdmin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: { user: string; fullName: string | null; note: string | null }) => {
+      const { error } = await supabase.rpc('admin_update_platform_admin', {
+        p_user: args.user,
+        p_full_name: args.fullName,
+        p_note: args.note,
+      })
+      if (error) throw error
+    },
+    // Cambia la lista y deja una línea nueva en la bitácora: se invalida todo ['admin'].
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin'] }),
+  })
+}
+
 /** Quita el acceso de plataforma. La RPC no deja quedarse sin ningún super-admin. */
 export function useAdminRevokePlatformAdmin() {
   const qc = useQueryClient()
