@@ -251,6 +251,16 @@ admin_set_tenant_ecf_provider(p_tenant uuid, p_provider text, p_reason text) ret
 admin_migrate_ecf_provider(p_from text, p_to text, p_reason text) returns jsonb              -- 0031
 ```
 
+### 3.6.1 Cuenta del super-admin
+
+El super-admin no suele tener fila en `profiles`: su **nombre y teléfono** viven en
+`auth.users.raw_user_meta_data` (`full_name`, `phone`), que cada quien edita con su
+propia sesión (`supabase.auth.updateUser({ data })`, hook `useUpdateAccountData`).
+El nombre es el que lee `admin_list_platform_admins` (0030). Rutas del panel fuera
+del menú principal: `/admin/perfil` (datos, contraseña —pide la actual— y cerrar
+otras sesiones) y `/admin/guia` (guía de uso de cada módulo, texto en
+`AdminGuidePage.tsx`: si un módulo cambia, su sección cambia en el mismo commit).
+
 ### 3.7 Proveedores de e-CF (0031)
 
 `ecf_providers` es un catálogo de **plataforma** (sin `tenant_id`; SELECT para

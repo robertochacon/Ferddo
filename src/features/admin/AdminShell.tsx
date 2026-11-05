@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  BarChart3, Building2, CreditCard, FileCheck2, History, LifeBuoy, LogOut, ShieldCheck, type LucideIcon,
+  BarChart3, BookOpen, Building2, CreditCard, FileCheck2, History, LifeBuoy, LogOut, ShieldCheck, UserRound,
+  type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthProvider'
 import { Wordmark, Logo } from '@/components/Logo'
@@ -34,6 +35,16 @@ export const ADMIN_SECTIONS: SectionDef[] = [
   { id: 'equipo', label: 'Super-admins', short: 'Admins', icon: ShieldCheck },
 ]
 
+/**
+ * Páginas de la cuenta: en la barra lateral van en su propio grupo y en el
+ * teléfono como iconos de la cabecera (la barra inferior ya lleva seis).
+ */
+type AccountPage = 'guia' | 'perfil'
+const ACCOUNT_LINKS: { id: AccountPage; label: string; to: string; icon: LucideIcon }[] = [
+  { id: 'guia', label: 'Guía de uso', to: '/admin/guia', icon: BookOpen },
+  { id: 'perfil', label: 'Mi perfil', to: '/admin/perfil', icon: UserRound },
+]
+
 /** La sección va en la URL (?s=negocios): el botón «atrás» funciona y se puede enlazar. */
 export const sectionHref = (id: AdminSection) => (id === 'resumen' ? '/admin' : `/admin?s=${id}`)
 
@@ -55,13 +66,15 @@ export function AdminShell({
   actions,
   children,
 }: {
-  section: AdminSection
+  section: AdminSection | AccountPage
   title: ReactNode
   /** Botones a la derecha de la cabecera (Actualizar…). */
   actions?: ReactNode
   children: ReactNode
 }) {
   const { user, signOut, tenant: supportTenant, exitSupport } = useAuth()
+  // El nombre vive en la cuenta de acceso (0030); sin él, el correo.
+  const displayName = (user?.user_metadata?.full_name as string | undefined) || user?.email
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -96,11 +109,28 @@ export function AdminShell({
               {s.label}
             </Link>
           ))}
+          <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Cuenta</p>
+          {ACCOUNT_LINKS.map((l) => (
+            <Link
+              key={l.id}
+              to={l.to}
+              aria-current={l.id === section ? 'page' : undefined}
+              className={cn(
+                'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
+                l.id === section ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+              )}
+            >
+              <l.icon className="h-5 w-5 shrink-0" />
+              {l.label}
+            </Link>
+          ))}
         </nav>
         <div className="border-t border-slate-100 p-3">
           <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
-            <Avatar name={user?.email} size="sm" />
-            <span className="min-w-0 flex-1 truncate text-xs text-slate-600">{user?.email}</span>
+            <Link to="/admin/perfil" className="flex min-w-0 flex-1 items-center gap-2" title="Mi perfil">
+              <Avatar name={displayName} size="sm" />
+              <span className="min-w-0 flex-1 truncate text-xs text-slate-600">{displayName}</span>
+            </Link>
             <button type="button" onClick={() => void handleSignOut()} aria-label="Cerrar sesión" title="Cerrar sesión"
               className="shrink-0 rounded-lg p-1.5 text-red-600 hover:bg-red-50">
               <LogOut className="h-4 w-4" />
@@ -115,7 +145,14 @@ export function AdminShell({
           <Logo className="h-8 w-8 lg:hidden" decorative />
           <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-slate-900">{title}</h1>
           {actions}
-          {/* En el teléfono no hay barra lateral: la salida va en la cabecera. */}
+          {/* En el teléfono no hay barra lateral: guía, perfil y salida van en la cabecera. */}
+          {ACCOUNT_LINKS.map((l) => (
+            <Link key={l.id} to={l.to} aria-label={l.label} title={l.label}
+              aria-current={l.id === section ? 'page' : undefined}
+              className={cn('rounded-lg p-2 hover:bg-slate-100 lg:hidden', l.id === section ? 'text-brand-600' : 'text-slate-500')}>
+              <l.icon className="h-5 w-5" />
+            </Link>
+          ))}
           <button type="button" onClick={() => void handleSignOut()} aria-label="Cerrar sesión"
             className="rounded-lg p-2 text-red-600 hover:bg-red-50 lg:hidden">
             <LogOut className="h-5 w-5" />

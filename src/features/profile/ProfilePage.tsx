@@ -214,7 +214,7 @@ function PersonalDataCard() {
 
 /* ── Contraseña ───────────────────────────────────────────────────────────── */
 
-function PasswordCard() {
+export function PasswordCard() {
   const change = useChangePassword()
   const toast = useToast()
   const [current, setCurrent] = useState('')
@@ -514,7 +514,7 @@ function CompaniesCard() {
 
 /* ── Sesiones ─────────────────────────────────────────────────────────────── */
 
-function SessionsCard() {
+export function SessionsCard() {
   const signOutOthers = useSignOutOthers()
   const toast = useToast()
 

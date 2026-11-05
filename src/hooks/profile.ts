@@ -95,6 +95,44 @@ export function useChangeEmail() {
   })
 }
 
+/**
+ * Nombre y teléfono guardados en la cuenta de acceso (`user_metadata`), no en
+ * `profiles`. Es lo que necesita quien no tiene negocio —el super-admin no
+ * suele tener fila en `profiles`— y es de donde el panel lee su nombre (0030).
+ * Cada quien edita los suyos con su propia sesión: no hace falta RPC.
+ *
+ * El teléfono se guarda solo con dígitos (y `+` delante si lo lleva), como el
+ * resto de teléfonos de la app.
+ */
+export function useUpdateAccountData() {
+  const qc = useQueryClient()
+  const { profile, refresh } = useAuth()
+  return useMutation({
+    mutationFn: async ({ fullName, phone }: { fullName: string; phone: string }) => {
+      const name = fullName.trim()
+      const tel = phone.trim().startsWith('+') ? '+' + phone.replace(/\D/g, '') : phone.replace(/\D/g, '')
+      const digits = tel.replace(/\D/g, '')
+      if (name.length > 80) throw new Error('El nombre no puede pasar de 80 caracteres.')
+      if (digits && (digits.length < 7 || digits.length > 15)) {
+        throw new Error('El teléfono debe tener entre 7 y 15 dígitos.')
+      }
+      // GoTrue mezcla `data` con lo que ya hay en user_metadata: solo se tocan estas dos claves.
+      const { error } = await supabase.auth.updateUser({ data: { full_name: name || null, phone: tel || null } })
+      if (error) throw error
+      // Si tiene perfil (p. ej. entró como gestor, 0028), que no quede con el nombre viejo.
+      if (profile) {
+        const { error: pErr } = await supabase.from('profiles').update({ full_name: name || null }).eq('id', profile.id)
+        if (pErr) throw pErr
+      }
+    },
+    onSuccess: async () => {
+      await refresh()
+      void qc.invalidateQueries({ queryKey: ['admin', 'platform-admins'] })
+      void qc.invalidateQueries({ queryKey: ['team', 'members'] })
+    },
+  })
+}
+
 /** Cierra la sesión en los DEMÁS dispositivos, conservando el actual. */
 export function useSignOutOthers() {
   return useMutation({

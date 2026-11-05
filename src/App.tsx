@@ -136,6 +136,12 @@ const AdminPage = lazyWithRetry(() =>
 const AdminTenantDetail = lazyWithRetry(() =>
   import('@/features/admin/AdminTenantDetail').then((m) => ({ default: m.AdminTenantDetail })),
 )
+const AdminProfilePage = lazyWithRetry(() =>
+  import('@/features/admin/AdminProfilePage').then((m) => ({ default: m.AdminProfilePage })),
+)
+const AdminGuidePage = lazyWithRetry(() =>
+  import('@/features/admin/AdminGuidePage').then((m) => ({ default: m.AdminGuidePage })),
+)
 const LandingPage = lazyWithRetry(() =>
   import('@/features/landing/LandingPage').then((m) => ({ default: m.LandingPage })),
 )
@@ -292,6 +298,22 @@ export default function App() {
             element={
               <RequirePlatformAdmin>
                 <AdminTenantDetail />
+              </RequirePlatformAdmin>
+            }
+          />
+          <Route
+            path="/admin/perfil"
+            element={
+              <RequirePlatformAdmin>
+                <AdminProfilePage />
+              </RequirePlatformAdmin>
+            }
+          />
+          <Route
+            path="/admin/guia"
+            element={
+              <RequirePlatformAdmin>
+                <AdminGuidePage />
               </RequirePlatformAdmin>
             }
           />
