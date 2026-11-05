@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
-  ArrowLeft, Ban, Building2, Contact, CreditCard, FileCheck2, LifeBuoy, LogIn, Monitor, Package, Play, Receipt,
+  ArrowLeft, ArrowRightLeft, Ban, Building2, Contact, CreditCard, FileCheck2, LifeBuoy, LogIn, Monitor, Package, Play, Receipt,
   Store, Trash2, UserRound, Users,
 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthProvider'
@@ -18,8 +18,8 @@ import { errorMessage } from '@/lib/errors'
 import { fmtDate, fmtDateTime, fmtTime, num } from '@/lib/format'
 import { ECF_STATUS, ROLE_LABEL } from '@/lib/labels'
 import {
-  useAdminMembers, useAdminRemoveMember, useAdminSetMemberRole, useAdminSetUserBanned,
-  useAdminTenantSummary, useAdminTenants,
+  useAdminEcfProviders, useAdminMembers, useAdminRemoveMember, useAdminSetMemberRole, useAdminSetUserBanned,
+  useAdminTenantEcf, useAdminTenantSummary, useAdminTenants,
 } from '@/hooks/admin'
 import { useBusinessTypes } from '@/hooks/core'
 import type { AdminMember, MemberRole } from '@/types/db'
@@ -27,6 +27,7 @@ import type { EcfStatus } from '@/types/erp'
 import { AuditLogCard } from './AuditLogCard'
 import { AdminShell } from './AdminShell'
 import { DeleteTenantModal } from './DeleteTenantModal'
+import { ChangeTenantProviderModal } from './EcfProvidersAdmin'
 import { EnterSupportModal } from './EnterSupportModal'
 import { TenantNotesCard } from './TenantNotesCard'
 import { SUB_STATUS_LABEL, SUB_STATUS_TONE, SubscriptionEditor } from './SubscriptionEditor'
@@ -63,6 +64,9 @@ export function AdminTenantDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [editingSub, setEditingSub] = useState(false)
   const [entering, setEntering] = useState(false)
+  const [changingProvider, setChangingProvider] = useState(false)
+  const ecf = useAdminTenantEcf(id)
+  const ecfProviders = useAdminEcfProviders()
   const membersRef = useRef<HTMLDivElement>(null)
 
   const t = (tenants.data ?? []).find((row) => row.id === id) ?? null
@@ -200,10 +204,46 @@ export function AdminTenantDetail() {
             </CardBody>
           </Card>
 
-          {/* ── e-CF por estado ── */}
+          {/* ── e-CF: proveedor y conteo por estado ── */}
           <Card>
-            <CardHeader title="Comprobantes electrónicos" subtitle="Conteo por estado, sin contenido" />
-            <CardBody>
+            <CardHeader
+              title="Facturación electrónica"
+              subtitle="Proveedor y comprobantes por estado, sin contenido"
+              action={
+                t && ecf.data && (
+                  <Button size="sm" variant="outline" onClick={() => setChangingProvider(true)}>
+                    <ArrowRightLeft className="h-4 w-4" /> Cambiar
+                  </Button>
+                )
+              }
+            />
+            <CardBody className="space-y-3">
+              {ecf.data && (
+                <dl className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-sm">
+                  <div className="col-span-2">
+                    <dt className="text-xs text-slate-500">Proveedor</dt>
+                    <dd className="font-medium text-slate-800">
+                      {ecfProviders.data?.find((p) => p.code === ecf.data.provider)?.name ?? ecf.data.provider}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">Ambiente</dt>
+                    <dd className="font-medium text-slate-800">{ENV_LABEL[ecf.data.environment] ?? ecf.data.environment}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">Emisión</dt>
+                    <dd className="font-medium text-slate-800">{ecf.data.ecf_enabled ? 'Activa' : 'Apagada'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">Sin enviar</dt>
+                    <dd className="font-medium tabular-nums text-slate-800">{num(ecf.data.unsent_invoices)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">En el proveedor</dt>
+                    <dd className="font-medium tabular-nums text-slate-800">{num(ecf.data.in_flight_invoices)}</dd>
+                  </div>
+                </dl>
+              )}
               {ecfEntries.length === 0 ? (
                 <p className="text-sm text-slate-400">Este negocio aún no ha emitido e-CF.</p>
               ) : (
@@ -270,6 +310,8 @@ export function AdminTenantDetail() {
       </Modal>
 
       <EnterSupportModal tenant={entering && t ? { id: t.id, name: t.name } : null} onClose={() => setEntering(false)} />
+      <ChangeTenantProviderModal tenant={changingProvider && t ? { id: t.id, name: t.name } : null} ecf={ecf.data}
+        onClose={() => setChangingProvider(false)} />
 
       <DeleteTenantModal
         tenantId={confirmDelete && id ? id : null}

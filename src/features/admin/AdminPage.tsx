@@ -31,6 +31,7 @@ import type { AdminPlanRequestRow, AdminTenantRow, PlanCode, PlatformAdminRow, S
 import { ADMIN_SECTIONS, AdminShell, type AdminSection } from './AdminShell'
 import { AuditLogCard } from './AuditLogCard'
 import { DeleteTenantModal } from './DeleteTenantModal'
+import { EcfProvidersAdmin } from './EcfProvidersAdmin'
 import { EnterSupportModal } from './EnterSupportModal'
 import { PlansCard } from './PlansCard'
 import { SUB_STATUS_LABEL, SUB_STATUS_TONE, SubscriptionEditor } from './SubscriptionEditor'
@@ -257,6 +258,7 @@ export function AdminPage() {
           )}
 
           {section === 'planes' && <PlansCard />}
+          {section === 'facturacion' && <EcfProvidersAdmin />}
           {section === 'bitacora' && <AuditLogCard />}
           {section === 'equipo' && <SuperAdminsCard />}
         </div>

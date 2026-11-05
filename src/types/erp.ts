@@ -577,6 +577,32 @@ export interface EcfType {
   sort_order: number
 }
 
+/** Un dato que pide un proveedor de e-CF (`ecf_providers.config_fields` / `credential_fields`). */
+export interface EcfField {
+  key: string
+  label: string
+  required?: boolean
+  help?: string
+}
+
+/** Fila del catálogo global `ecf_providers` (0031). */
+export interface EcfProvider {
+  code: string
+  name: string
+  description: string | null
+  website: string | null
+  /** Se ofrece a los negocios. Quien ya lo usa lo conserva aunque se apague. */
+  is_enabled: boolean
+  /** Sin validez fiscal (simulador). */
+  is_simulated: boolean
+  allows_production: boolean
+  /** Datos NO secretos que van a `fiscal_settings.provider_config`. */
+  config_fields: EcfField[]
+  /** Claves que espera dentro de las credenciales cifradas. */
+  credential_fields: EcfField[]
+  sort_order: number
+}
+
 export interface FiscalSettings {
   tenant_id: string
   ecf_enabled: boolean

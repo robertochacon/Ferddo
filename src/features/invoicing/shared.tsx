@@ -10,7 +10,8 @@ import type { EcfType, FiscalSettings } from '@/types/erp'
 export const ENV_INFO: Record<FiscalSettings['environment'], { label: string; description: string; tone: Tone }> = {
   test: {
     label: 'Pruebas',
-    description: 'Para practicar el flujo completo con el simulador. Nada se envía a la DGII y nada tiene validez fiscal.',
+    description:
+      'Para practicar el flujo completo. Nada tiene validez fiscal: con el simulador nada sale de Ferddo; con un proveedor, se usa su ambiente de pruebas.',
     tone: 'slate',
   },
   certification: {
@@ -33,15 +34,6 @@ export const FISCAL_STATUS: Record<FiscalSettings['status'], { label: string; to
   certifying: { label: 'En certificación', tone: 'amber' },
   authorized: { label: 'En producción', tone: 'green' },
   suspended: { label: 'Suspendida', tone: 'red' },
-}
-
-/** Proveedores conocidos. Solo el simulador está integrado; no se listan marcas que no existen en el código. */
-export const PROVIDER_LABEL: Record<string, string> = {
-  simulator: 'Simulador (sin validez fiscal)',
-}
-
-export function providerLabel(code: string): string {
-  return PROVIDER_LABEL[code] ?? `${code} (pendiente de integrar)`
 }
 
 export function ecfTypeLabel(code: string, types: EcfType[] | undefined): string {

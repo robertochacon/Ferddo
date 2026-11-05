@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { AlertTriangle, KeyRound, Lock, ShieldAlert, ShieldCheck, Upload } from 'lucide-react'
 import {
+  useEcfProviders,
   useEcfTypes,
   useSaveFiscalSettings,
   useUploadFiscalCredentials,
@@ -16,10 +17,15 @@ import { useToast } from '@/components/ui/toast'
 import { checkDocNumber } from '@/lib/labels'
 import { errorMessage } from '@/lib/errors'
 import { fmtDateTime } from '@/lib/format'
-import { ENV_INFO, FISCAL_STATUS, FunctionError, PROVIDER_LABEL, providerLabel } from '@/features/invoicing/shared'
-import type { FiscalSettings } from '@/types/erp'
+import { ENV_INFO, FISCAL_STATUS, FunctionError } from '@/features/invoicing/shared'
+import type { EcfProvider, FiscalSettings } from '@/types/erp'
 
 const ENVIRONMENTS: FiscalSettings['environment'][] = ['test', 'certification', 'production']
+
+/** `provider_config` es jsonb libre; el formulario lo maneja como texto. */
+function configAsText(cfg: Record<string, unknown> | undefined): Record<string, string> {
+  return Object.fromEntries(Object.entries(cfg ?? {}).map(([k, v]) => [k, v == null ? '' : String(v)]))
+}
 
 function initialForm(s: FiscalSettings | null): FiscalSettingsInput {
   return {
@@ -31,6 +37,7 @@ function initialForm(s: FiscalSettings | null): FiscalSettingsInput {
     phone: s?.phone ?? '',
     environment: s?.environment ?? 'test',
     provider: s?.provider ?? 'simulator',
+    provider_config: configAsText(s?.provider_config),
     default_ecf_type: s?.default_ecf_type ?? '32',
     ecf_enabled: s?.ecf_enabled ?? false,
   }
@@ -49,7 +56,7 @@ export function ConfigTab({ settings }: { settings: FiscalSettings | null }) {
       {/* `key`: al guardar, la fila vuelve con otro updated_at y el formulario
           se reinicia con lo que de verdad quedó en la base. */}
       <SettingsForm key={settings?.updated_at ?? 'new'} settings={settings} />
-      <CredentialsCard settings={settings} />
+      <CredentialsCard key={settings?.provider ?? 'none'} settings={settings} />
     </div>
   )
 }
@@ -63,8 +70,8 @@ function LegalWarning() {
           <p className="font-semibold">Antes de emitir con validez fiscal</p>
           <p>
             Producción exige estar <strong>autorizado por la DGII como emisor electrónico</strong>, tener un certificado
-            digital vigente y un <strong>proveedor certificado</strong> integrado. Hoy Ferddo solo trae el{' '}
-            <strong>simulador</strong>, que sirve para practicar y <strong>no tiene validez fiscal</strong>: sus
+            digital vigente y un <strong>proveedor certificado</strong>. Los proveedores disponibles los habilita
+            Ferddo; el <strong>simulador</strong> sirve para practicar y <strong>no tiene validez fiscal</strong>: sus
             comprobantes no existen para la DGII.
           </p>
         </div>
@@ -77,14 +84,35 @@ function SettingsForm({ settings }: { settings: FiscalSettings | null }) {
   const [form, setForm] = useState<FiscalSettingsInput>(() => initialForm(settings))
   const save = useSaveFiscalSettings()
   const types = useEcfTypes()
+  const providers = useEcfProviders()
   const toast = useToast()
   const set = <K extends keyof FiscalSettingsInput>(k: K, v: FiscalSettingsInput[K]) => setForm((f) => ({ ...f, [k]: v }))
 
+  // Se ofrecen los activos; el guardado se conserva aunque ya no se ofrezca, para
+  // no cambiarlo a escondidas al guardar otra cosa (la base lo permite).
+  const catalog = providers.data ?? []
+  const options = catalog.filter((p) => p.is_enabled || p.code === settings?.provider)
+  const provider: EcfProvider | undefined = catalog.find((p) => p.code === form.provider)
+  const changeProvider = (code: string) =>
+    setForm((f) => ({
+      ...f,
+      provider: code,
+      // La configuración es de CADA proveedor: al volver al guardado se recupera la suya.
+      provider_config: code === settings?.provider ? configAsText(settings?.provider_config) : {},
+    }))
+  const setConfig = (key: string, value: string) =>
+    setForm((f) => ({ ...f, provider_config: { ...f.provider_config, [key]: value } }))
+
   const rncDigits = form.rnc.replace(/\D/g, '')
   const rncHint = rncDigits ? RNC_HINT[checkDocNumber(rncDigits)] : undefined
-  const isSim = form.provider === 'simulator'
-  const missingForEnable = form.ecf_enabled && (!rncDigits || !form.legal_name.trim() || !form.fiscal_address.trim())
-  const blockedProd = isSim && form.environment === 'production'
+  const isSim = provider?.is_simulated ?? form.provider === 'simulator'
+  const noProduction = provider ? !provider.allows_production : isSim
+  const missingConfig = (provider?.config_fields ?? [])
+    .filter((f) => f.required && !(form.provider_config[f.key] ?? '').trim())
+    .map((f) => f.label)
+  const missingForEnable =
+    form.ecf_enabled && (!rncDigits || !form.legal_name.trim() || !form.fiscal_address.trim() || missingConfig.length > 0)
+  const blockedProd = noProduction && form.environment === 'production'
   const saleTypes = (types.data ?? []).filter((t) => t.is_supported && !t.is_note)
   const status = settings ? FISCAL_STATUS[settings.status] : FISCAL_STATUS.not_configured
 
@@ -143,18 +171,15 @@ function SettingsForm({ settings }: { settings: FiscalSettings | null }) {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Proveedor">
-              <Select value={form.provider} onChange={(e) => set('provider', e.target.value)}>
-                {Object.entries(PROVIDER_LABEL).map(([code, label]) => (
-                  <option key={code} value={code}>
-                    {label}
+              <Select value={form.provider} onChange={(e) => changeProvider(e.target.value)}>
+                {options.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    {p.name}
+                    {!p.is_enabled ? ' (ya no se ofrece)' : ''}
                   </option>
                 ))}
-                {/* El valor guardado se respeta aunque no esté integrado, para no
-                    cambiarlo a escondidas al guardar otra cosa. */}
-                {!PROVIDER_LABEL[form.provider] && <option value={form.provider}>{providerLabel(form.provider)}</option>}
-                <option value="" disabled>
-                  Proveedor autorizado DGII — pendiente de integrar
-                </option>
+                {/* Mientras carga el catálogo, el guardado sigue seleccionable. */}
+                {!options.some((p) => p.code === form.provider) && <option value={form.provider}>{form.provider}</option>}
               </Select>
             </Field>
             <Field label="Ambiente">
@@ -163,14 +188,39 @@ function SettingsForm({ settings }: { settings: FiscalSettings | null }) {
                 onChange={(e) => set('environment', e.target.value as FiscalSettings['environment'])}
               >
                 {ENVIRONMENTS.map((env) => (
-                  <option key={env} value={env} disabled={env === 'production' && isSim}>
+                  <option key={env} value={env} disabled={env === 'production' && noProduction}>
                     {ENV_INFO[env].label}
-                    {env === 'production' && isSim ? ' (requiere proveedor autorizado)' : ''}
+                    {env === 'production' && noProduction ? ' (requiere proveedor autorizado)' : ''}
                   </option>
                 ))}
               </Select>
             </Field>
           </div>
+          {provider?.description && (
+            <p className="text-sm text-slate-600">
+              {provider.description}
+              {provider.website && (
+                <>
+                  {' '}
+                  <a href={provider.website} target="_blank" rel="noreferrer" className="font-medium text-brand-600 hover:underline">
+                    Sitio del proveedor
+                  </a>
+                </>
+              )}
+            </p>
+          )}
+
+          {/* Datos que pide ESTE proveedor (los define Ferddo en el catálogo). */}
+          {(provider?.config_fields ?? []).length > 0 && (
+            <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-3 sm:grid-cols-2">
+              {provider!.config_fields.map((f) => (
+                <Field key={f.key} label={f.label} required={f.required} hint={f.help}>
+                  <Input value={form.provider_config[f.key] ?? ''} onChange={(e) => setConfig(f.key, e.target.value)} />
+                </Field>
+              ))}
+            </div>
+          )}
+
           <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
             <strong>{ENV_INFO[form.environment].label}:</strong> {ENV_INFO[form.environment].description}
           </p>
@@ -195,8 +245,10 @@ function SettingsForm({ settings }: { settings: FiscalSettings | null }) {
             <p className="flex items-start gap-2 text-sm font-medium text-red-600">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               {blockedProd
-                ? 'El simulador no puede usarse en producción.'
-                : 'Para activar completa RNC, razón social y dirección fiscal.'}
+                ? `${provider?.name ?? 'Este proveedor'} no puede usarse en producción.`
+                : missingConfig.length
+                  ? `Para activar con ${provider?.name ?? 'este proveedor'} completa: ${missingConfig.join(', ')}.`
+                  : 'Para activar completa RNC, razón social y dirección fiscal.'}
             </p>
           )}
 
@@ -236,7 +288,12 @@ interface CertificateMeta {
 
 function CredentialsCard({ settings }: { settings: FiscalSettings | null }) {
   const upload = useUploadFiscalCredentials()
+  const providers = useEcfProviders()
   const toast = useToast()
+  // Las credenciales son del proveedor GUARDADO (el que usa la cola), no del que
+  // se esté eligiendo en el formulario de arriba sin guardar.
+  const credFields = (providers.data ?? []).find((p) => p.code === settings?.provider)?.credential_fields ?? []
+  const [credValues, setCredValues] = useState<Record<string, string>>({})
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [password, setPassword] = useState('')
@@ -259,7 +316,10 @@ function CredentialsCard({ settings }: { settings: FiscalSettings | null }) {
       input.certificate_filename = file.name
     }
     if (password) input.certificate_password = password
-    if (creds.trim()) {
+    if (credFields.length) {
+      const filled = Object.fromEntries(Object.entries(credValues).filter(([, v]) => v.trim()))
+      if (Object.keys(filled).length) input.provider_credentials = filled
+    } else if (creds.trim()) {
       let parsed: unknown
       try {
         parsed = JSON.parse(creds)
@@ -286,6 +346,7 @@ function CredentialsCard({ settings }: { settings: FiscalSettings | null }) {
         setFile(null)
         setPassword('')
         setCreds('')
+        setCredValues({})
         if (fileRef.current) fileRef.current.value = ''
       },
       onError: (err) => toast.error(errorMessage(err, 'No se pudieron guardar las credenciales.')),
@@ -346,6 +407,22 @@ function CredentialsCard({ settings }: { settings: FiscalSettings | null }) {
               onChange={(e) => setPassword(e.target.value)}
             />
           </Field>
+          {credFields.length > 0 ? (
+            <div className="space-y-3 rounded-xl border border-slate-200 p-3">
+              <p className="text-sm font-medium text-slate-700">Credenciales del proveedor</p>
+              {/* Al volver a guardar hay que escribirlas todas: se reemplazan juntas y nunca se muestran de vuelta. */}
+              {credFields.map((f) => (
+                <Field key={f.key} label={f.label} hint={f.help}>
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    value={credValues[f.key] ?? ''}
+                    onChange={(e) => setCredValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  />
+                </Field>
+              ))}
+            </div>
+          ) : (
           <Field
             label="Credenciales del proveedor (opcional)"
             hint="JSON con los datos que te entregue el proveedor autorizado. Se usarán cuando su integración esté disponible."
@@ -360,6 +437,7 @@ function CredentialsCard({ settings }: { settings: FiscalSettings | null }) {
               className="font-mono"
             />
           </Field>
+          )}
           {formError && <p className="text-sm font-medium text-red-600">{formError}</p>}
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="flex items-center gap-2 text-xs text-slate-500">

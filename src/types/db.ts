@@ -197,6 +197,51 @@ export interface PlatformAuditRow {
   created_at: string
 }
 
+/** `admin_list_ecf_providers()` (0031): el catálogo con su uso. */
+export interface AdminEcfProviderRow {
+  code: string
+  name: string
+  description: string | null
+  website: string | null
+  is_enabled: boolean
+  is_simulated: boolean
+  allows_production: boolean
+  config_fields: { key: string; label: string; required?: boolean; help?: string }[]
+  credential_fields: { key: string; label: string; required?: boolean; help?: string }[]
+  sort_order: number
+  tenants: number
+  enabled_tenants: number
+  production_tenants: number
+  /** `pending`/`error` sin track_id: se reasignan al cambiar de proveedor. */
+  unsent_invoices: number
+  /** Ya los tiene el proveedor: se quedan con él. */
+  in_flight_invoices: number
+  total_invoices: number
+}
+
+/** `admin_get_tenant_ecf(p_tenant)` (0031): estado fiscal de un negocio, sin datos del contribuyente. */
+export interface AdminTenantEcf {
+  configured: boolean
+  provider: string
+  environment: 'test' | 'certification' | 'production'
+  status: 'not_configured' | 'configuring' | 'certifying' | 'authorized' | 'suspended'
+  ecf_enabled: boolean
+  credentials_set: boolean
+  unsent_invoices: number
+  in_flight_invoices: number
+}
+
+/** Resultado de cambiar/migrar el proveedor de e-CF (0031). */
+export interface EcfProviderChangeResult {
+  from: string | null
+  to: string
+  repointed: number
+  moved?: number
+  skipped_production?: number
+  /** Etiquetas de los campos obligatorios que el negocio tendrá que llenar. */
+  missing_config?: string[]
+}
+
 /** Fila de `tenant_admin_notes` (0028): nota interna del equipo Ferddo. */
 export interface TenantAdminNote {
   id: string

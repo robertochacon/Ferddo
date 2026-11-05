@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/auth/AuthProvider'
-import { useFiscalSequences, useFiscalSettings, useProcessEcfQueue, type EcfProcessSummary } from '@/hooks/invoicing'
+import { useEcfProviders, useFiscalSequences, useFiscalSettings, useProcessEcfQueue, type EcfProcessSummary } from '@/hooks/invoicing'
 import { RequireAccess } from '@/components/RequireAccess'
 import { PageHeader } from '@/components/PageHeader'
 import { Card, CardBody } from '@/components/ui/Card'
@@ -12,7 +12,7 @@ import { PageLoader } from '@/components/ui/misc'
 import { useToast } from '@/components/ui/toast'
 import { errorMessage } from '@/lib/errors'
 import { num } from '@/lib/format'
-import { ENV_INFO, FISCAL_STATUS, FunctionError, SimBadge, providerLabel } from '@/features/invoicing/shared'
+import { ENV_INFO, FISCAL_STATUS, FunctionError, SimBadge } from '@/features/invoicing/shared'
 import { InvoicesTab } from '@/features/invoicing/InvoicesTab'
 import { ConfigTab } from '@/features/invoicing/ConfigTab'
 import { SequencesTab } from '@/features/invoicing/SequencesTab'
@@ -50,6 +50,8 @@ function Invoicing() {
   const settings = useFiscalSettings()
   const sequences = useFiscalSequences()
   const process = useProcessEcfQueue()
+  // El nombre sale del catálogo (0031); mientras carga, el código.
+  const providers = useEcfProviders()
   const toast = useToast()
   const canConfigure = can('fiscal.manage')
   const [tab, setTab] = useState<Tab>('docs')
@@ -73,6 +75,9 @@ function Invoicing() {
   if (settings.isLoading) return <PageLoader label="Cargando facturación electrónica…" />
 
   const fs = settings.data ?? null
+  const providerRow = fs ? providers.data?.find((p) => p.code === fs.provider) : undefined
+  const providerName = providerRow?.name ?? fs?.provider ?? ''
+  const providerSimulated = providerRow?.is_simulated ?? fs?.provider === 'simulator'
   const env = fs ? ENV_INFO[fs.environment] : null
   const status = fs ? FISCAL_STATUS[fs.status] : FISCAL_STATUS.not_configured
 
@@ -99,8 +104,8 @@ function Invoicing() {
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <Badge tone={status.tone}>{status.label}</Badge>
         {env && <Badge tone={env.tone}>Ambiente: {env.label}</Badge>}
-        {fs && <span className="text-slate-500">Proveedor: {providerLabel(fs.provider)}</span>}
-        {fs?.provider === 'simulator' && <SimBadge />}
+        {fs && <span className="text-slate-500">Proveedor: {providerName}</span>}
+        {fs && providerSimulated && <SimBadge />}
       </div>
 
       {!fs?.ecf_enabled && (

@@ -36,6 +36,7 @@ const EVENT_LABEL: Record<string, string> = {
   created: 'Creado con e-NCF asignado',
   provider_result: 'Respuesta del proveedor',
   manual_retry: 'Reintento manual',
+  provider_changed: 'Cambio de proveedor',
 }
 
 export function InvoicesTab({ timezone }: { timezone: string }) {

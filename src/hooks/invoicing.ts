@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { functionsUrl, supabase } from '@/lib/supabase'
 import { dayStartIso, addDays } from '@/hooks/reports'
 import type {
+  EcfProvider,
   EcfStatus,
   EcfType,
   ElectronicInvoice,
@@ -130,6 +131,8 @@ export interface FiscalSettingsInput {
   phone: string
   environment: FiscalSettings['environment']
   provider: string
+  /** Datos no secretos que pide el proveedor (sus `config_fields`). */
+  provider_config: Record<string, string>
   default_ecf_type: string
   ecf_enabled: boolean
 }
@@ -221,7 +224,7 @@ export function isEcfNotDeployed(err: unknown): boolean {
   return err instanceof EcfFunctionError && err.notDeployed
 }
 
-async function callEcf<T>(route: 'process' | 'credentials', body: unknown): Promise<T> {
+async function callEcf<T>(route: 'process' | 'credentials' | 'providers', body: unknown): Promise<T> {
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -330,4 +333,32 @@ export function useUploadFiscalCredentials() {
     mutationFn: (input: FiscalCredentialsInput) => callEcf<FiscalCredentialsResult>('credentials', input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['ecf', 'settings'] }),
   })
+}
+
+// ── Catálogo de proveedores (0031) ───────────────────────────────────────────
+
+/**
+ * Catálogo global de proveedores de e-CF. Lo leen todos (RLS: cualquier
+ * usuario con sesión); el negocio elige entre los activos y conserva el suyo
+ * aunque se haya dejado de ofrecer.
+ */
+export function useEcfProviders() {
+  return useQuery({
+    queryKey: ['ecf', 'providers'],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<EcfProvider[]> => {
+      const { data, error } = await supabase.from('ecf_providers').select('*').order('sort_order').order('name')
+      if (error) throw error
+      return (data ?? []) as EcfProvider[]
+    },
+  })
+}
+
+/**
+ * Adaptadores instalados en la Edge Function desplegada (`/ecf/providers`, solo
+ * super-admin). Lo que el catálogo ofrece sin adaptador fallaría al enviar.
+ */
+export async function fetchInstalledEcfProviders(): Promise<{ code: string; simulated: boolean }[]> {
+  const r = await callEcf<{ providers?: { code: string; simulated: boolean }[] }>('providers', {})
+  return r.providers ?? []
 }

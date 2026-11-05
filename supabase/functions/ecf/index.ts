@@ -8,6 +8,8 @@
 //                     cabecera `x-cron-secret`: procesa todas las empresas.
 //   /ecf/credentials  Dueño o `fiscal.manage`: sube certificado/credenciales,
 //                     que se guardan CIFRADOS en fiscal_secrets.
+//   /ecf/providers    Super-admin: qué adaptadores trae este despliegue, para
+//                     que el panel los cruce con el catálogo `ecf_providers`.
 //
 // SEGURIDAD
 //   • `verify_jwt = false` en config.toml SOLO porque /cron no lleva JWT. Las
@@ -33,7 +35,7 @@ import type {
   ProviderResult,
   ProviderResultStatus,
 } from '../_shared/ecf/provider.ts'
-import { getProvider, providerNotConfiguredMessage } from '../_shared/ecf/registry.ts'
+import { getProvider, installedProviders, providerNotConfiguredMessage } from '../_shared/ecf/registry.ts'
 import { decryptSecret, encryptSecret, hasValidKey } from '../_shared/ecf/crypto.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -461,6 +463,18 @@ Deno.serve(async (req) => {
       }
       const summary = await processQueue(admin, null, CRON_BATCH)
       return json({ ok: true, ...summary })
+    }
+
+    if (route === 'providers') {
+      // Sin empresa: el super-admin no tiene. Se valida el token y el rol
+      // COMO el usuario, con la misma función que usan las políticas.
+      const jwt = bearer(req)
+      if (!jwt) return json({ error: 'No autorizado' }, 401)
+      const client = userClient(jwt)
+      const { data: isAdmin, error } = await client.rpc('auth_is_platform_admin')
+      if (error) return json({ error: 'Sesión inválida o vencida. Vuelve a iniciar sesión.' }, 401)
+      if (isAdmin !== true) return json({ error: 'No autorizado' }, 403)
+      return json({ ok: true, providers: installedProviders() })
     }
 
     if (route === 'process' || route === 'credentials') {

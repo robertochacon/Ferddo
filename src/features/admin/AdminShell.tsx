@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  BarChart3, Building2, CreditCard, History, LifeBuoy, LogOut, ShieldCheck, type LucideIcon,
+  BarChart3, Building2, CreditCard, FileCheck2, History, LifeBuoy, LogOut, ShieldCheck, type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthProvider'
 import { Wordmark, Logo } from '@/components/Logo'
@@ -11,12 +11,12 @@ import { useToast } from '@/components/ui/toast'
 import { cn } from '@/lib/cn'
 import { errorMessage } from '@/lib/errors'
 
-export type AdminSection = 'resumen' | 'negocios' | 'planes' | 'bitacora' | 'equipo'
+export type AdminSection = 'resumen' | 'negocios' | 'planes' | 'facturacion' | 'bitacora' | 'equipo'
 
 interface SectionDef {
   id: AdminSection
   label: string
-  /** Etiqueta corta de la barra inferior del teléfono (cinco en 360 px). */
+  /** Etiqueta corta de la barra inferior del teléfono (seis en 360 px). */
   short: string
   icon: LucideIcon
 }
@@ -29,6 +29,7 @@ export const ADMIN_SECTIONS: SectionDef[] = [
   { id: 'resumen', label: 'Resumen', short: 'Resumen', icon: BarChart3 },
   { id: 'negocios', label: 'Negocios', short: 'Negocios', icon: Building2 },
   { id: 'planes', label: 'Planes', short: 'Planes', icon: CreditCard },
+  { id: 'facturacion', label: 'Facturación e-CF', short: 'e-CF', icon: FileCheck2 },
   { id: 'bitacora', label: 'Bitácora', short: 'Bitácora', icon: History },
   { id: 'equipo', label: 'Super-admins', short: 'Admins', icon: ShieldCheck },
 ]

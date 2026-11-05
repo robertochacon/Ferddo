@@ -1,15 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { removeTenantFiles } from '@/lib/storage'
+import { fetchInstalledEcfProviders } from '@/hooks/invoicing'
 import type {
+  AdminEcfProviderRow,
   AdminMember,
   AdminOverview,
   AdminPlanRequestRow,
   AdminTenantPurgePreview,
   AdminTenantPurgeResult,
+  AdminTenantEcf,
   AdminTenantPurgeRow,
   AdminTenantRow,
   AdminTenantSummary,
+  EcfProviderChangeResult,
   MemberRole,
   PlanCode,
   PlanRequestStatus,
@@ -467,5 +471,115 @@ export function useDeleteTenantNote() {
       if (!data?.length) throw new Error('Solo puedes borrar las notas que escribiste tú.')
     },
     onSuccess: (_d, args) => qc.invalidateQueries({ queryKey: ['admin', 'notes', args.tenant] }),
+  })
+}
+
+// ── Proveedores de facturación electrónica (0031) ────────────────────────────
+
+/** Catálogo con su uso (negocios, comprobantes pendientes y en vuelo). */
+export function useAdminEcfProviders() {
+  return useQuery({
+    queryKey: ['admin', 'ecf-providers'],
+    queryFn: async (): Promise<AdminEcfProviderRow[]> => {
+      const { data, error } = await supabase.rpc('admin_list_ecf_providers')
+      if (error) throw error
+      return (data ?? []) as AdminEcfProviderRow[]
+    },
+  })
+}
+
+/**
+ * Adaptadores que trae la Edge Function desplegada. `null` = no se pudo saber
+ * (función sin desplegar o versión anterior a la 0031): el panel lo dice en vez
+ * de dar por hecho que falta.
+ */
+export function useAdminInstalledEcfProviders() {
+  return useQuery({
+    queryKey: ['admin', 'ecf-adapters'],
+    retry: false,
+    queryFn: async (): Promise<Set<string> | null> => {
+      try {
+        return new Set((await fetchInstalledEcfProviders()).map((p) => p.code))
+      } catch {
+        return null
+      }
+    },
+  })
+}
+
+/** Todo lo que deja desfasado un cambio de proveedor: el panel y el catálogo que lee el negocio. */
+function invalidateEcf(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ['admin'] })
+  void qc.invalidateQueries({ queryKey: ['ecf'] })
+}
+
+export type EcfProviderInput = Omit<AdminEcfProviderRow,
+  'tenants' | 'enabled_tenants' | 'production_tenants' | 'unsent_invoices' | 'in_flight_invoices' | 'total_invoices'>
+
+export function useAdminSaveEcfProvider() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: EcfProviderInput) => {
+      const { error } = await supabase.rpc('admin_save_ecf_provider', { p: input })
+      if (error) throw error
+    },
+    onSuccess: () => invalidateEcf(qc),
+  })
+}
+
+export function useAdminDeleteEcfProvider() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (code: string) => {
+      const { error } = await supabase.rpc('admin_delete_ecf_provider', { p_code: code })
+      if (error) throw error
+    },
+    onSuccess: () => invalidateEcf(qc),
+  })
+}
+
+export function useAdminTenantEcf(tenantId: string | undefined) {
+  return useQuery({
+    queryKey: ['admin', 'tenant-ecf', tenantId],
+    enabled: Boolean(tenantId),
+    queryFn: async (): Promise<AdminTenantEcf> => {
+      const { data, error } = await supabase.rpc('admin_get_tenant_ecf', { p_tenant: tenantId })
+      if (error) throw error
+      return data as AdminTenantEcf
+    },
+  })
+}
+
+/** Cambia el proveedor de UN negocio; reasigna lo que aún no salió. */
+export function useAdminSetTenantEcfProvider() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: { tenant: string; provider: string; reason: string }): Promise<EcfProviderChangeResult> => {
+      const { data, error } = await supabase.rpc('admin_set_tenant_ecf_provider', {
+        p_tenant: args.tenant,
+        p_provider: args.provider,
+        p_reason: args.reason,
+      })
+      if (error) throw error
+      return data as EcfProviderChangeResult
+    },
+    onSuccess: () => invalidateEcf(qc),
+  })
+}
+
+/** Pasa TODOS los negocios de un proveedor a otro (omite producción si el destino no la admite). */
+export function useAdminMigrateEcfProvider() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: { from: string; to: string; reason: string }): Promise<EcfProviderChangeResult> => {
+      const { data, error } = await supabase.rpc('admin_migrate_ecf_provider', {
+        p_from: args.from,
+        p_to: args.to,
+        p_reason: args.reason,
+      })
+      if (error) throw error
+      return data as EcfProviderChangeResult
+    },
+    onSuccess: () => invalidateEcf(qc),
   })
 }

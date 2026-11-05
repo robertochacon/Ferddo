@@ -1,7 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // Ferddo · Registro de proveedores de e-CF
 //
-// El nombre sale de `fiscal_settings.provider` (vía el payload de la cola). Un
+// El nombre sale de `fiscal_settings.provider` (vía el payload de la cola), que
+// desde la 0031 apunta al catálogo `ecf_providers`: el código de un proveedor
+// del catálogo tiene que coincidir con `name` de su adaptador aquí. Un
 // proveedor que no esté aquí NO se intenta adivinar: el documento pasa a
 // `error` con un mensaje que dice qué falta, y la cola lo reintentará cuando
 // se configure. Añadir un proveedor real = un archivo nuevo en esta carpeta,
@@ -26,4 +28,13 @@ export function providerNotConfiguredMessage(name: string | null | undefined): s
 
 export function knownProviders(): string[] {
   return Object.keys(PROVIDERS)
+}
+
+/**
+ * Adaptadores que de verdad están en este despliegue. El catálogo de la base
+ * (`ecf_providers`, 0031) dice qué se OFRECE; esto, qué se sabe ENVIAR. El
+ * panel cruza las dos listas para no ofrecer un proveedor sin adaptador.
+ */
+export function installedProviders(): { code: string; simulated: boolean }[] {
+  return Object.values(PROVIDERS).map((p) => ({ code: p.name, simulated: p.simulated }))
 }

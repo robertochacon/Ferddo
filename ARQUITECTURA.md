@@ -243,7 +243,40 @@ admin_list_tenant_purges(p_limit integer default 20) returns jsonb
 admin_enter_tenant(p_tenant uuid, p_reason text) returns timestamptz   -- 0028, devuelve la caducidad
 admin_exit_tenant() returns void                                        -- 0028
 admin_update_platform_admin(p_user uuid, p_full_name text, p_note text) returns void  -- 0030, nombre y función; el correo no
+admin_list_ecf_providers() returns jsonb                                 -- 0031, catálogo + uso
+admin_save_ecf_provider(p jsonb) returns void                            -- 0031, alta/edición (el código no cambia)
+admin_delete_ecf_provider(p_code text) returns void                      -- 0031, solo si nadie lo usa
+admin_get_tenant_ecf(p_tenant uuid) returns jsonb                        -- 0031, proveedor/ambiente/cola, sin datos del contribuyente
+admin_set_tenant_ecf_provider(p_tenant uuid, p_provider text, p_reason text) returns jsonb   -- 0031
+admin_migrate_ecf_provider(p_from text, p_to text, p_reason text) returns jsonb              -- 0031
 ```
+
+### 3.7 Proveedores de e-CF (0031)
+
+`ecf_providers` es un catálogo de **plataforma** (sin `tenant_id`; SELECT para
+cualquier usuario con sesión, escritura solo por `admin_*`): código (= `name` del
+adaptador en `supabase/functions/_shared/ecf/registry.ts`), nombre, `is_enabled`
+(se ofrece), `is_simulated`, `allows_production`, `config_fields` (datos no
+secretos → `fiscal_settings.provider_config`) y `credential_fields` (claves que el
+adaptador espera dentro de las credenciales cifradas). `fiscal_settings.provider`
+y `electronic_invoices.provider` tienen FK al catálogo.
+
+- **Catálogo ≠ adaptador.** El catálogo dice qué se ofrece; el adaptador, qué se
+  sabe enviar. `/ecf/providers` (solo super-admin) devuelve los adaptadores del
+  despliegue y el panel los cruza.
+- `_ecf_check_provider` aplica las reglas en un solo sitio: existe, está ofrecido
+  si se CAMBIA (quien ya lo usa lo conserva) y admite producción si hace falta.
+  `save_fiscal_settings` exige además los `config_fields` obligatorios al activar.
+- **Cambiar de proveedor reasigna lo que no salió** (`_ecf_repoint_unsent`):
+  `pending`/`error` sin `track_id` pasan al nuevo (con `simulated` recalculado y
+  evento `provider_changed`). `sending`/`sent` se quedan: solo su proveedor puede
+  responder por ellos. La configuración del proveedor anterior se descarta; el
+  certificado se conserva.
+- La migración masiva omite (y cuenta) a los negocios en producción si el destino
+  no la admite. Todo queda en `audit_logs` del negocio y en `platform_audit_logs`.
+- El super-admin cambia el proveedor por RPC pero **no lee** `fiscal_settings`
+  (RLS): `admin_get_tenant_ecf` devuelve solo proveedor, ambiente y conteos.
+
 
 ### 3.5 Acceso de soporte («entrar como gestor», 0028)
 
@@ -519,6 +552,7 @@ Revisar cada pantalla a 360 px.
 ['admin','members', tenantId]     ['admin','plan-requests'] ['admin','platform-admins']
 ['admin','tenant-summary', id]    ['admin','purges']
 ['admin','audit', tenantId|'todas'] ['admin','notes', tenantId]       (0028)
+['admin','ecf-providers'] ['admin','ecf-adapters'] ['admin','tenant-ecf', id]   (0031)
 ```
 
 **Ferddo (ERP).** Claves añadidas — no inventes otras para estos datos:
@@ -529,6 +563,7 @@ Revisar cada pantalla a 360 px.
 ['inventory', …] ['sales', filtros] ['sales','detail',id] ['cash', …] ['pos', …]
 ['purchases', …] ['expenses', …] ['quotations', …] ['ecf', …] ['reports', …]
 ['team','members'] ['team','invites'] ['team','role-permissions']
+['ecf','providers']                                                   (catálogo de proveedores, 0031)
 ['products','components', productId] ['products','composites']   (recetas/kits, 0025)
 ['appointments','list', {from,to,staffId}]                           (citas, 0026)
 ```
@@ -624,6 +659,7 @@ Se entregan **los dos** destinos:
                            + triggers, tenant_admin_notes, filtros del tope de miembros
 0029_support_revoke.sql    cortar el soporte (set_member_active) borra la fila y lo registra
 0030_edit_platform_admins.sql admin_update_platform_admin + nombre y último acceso en la lista
+0031_ecf_providers.sql     catálogo ecf_providers + FK, cambio de proveedor con reasignación, RPC del panel
 ```
 Cada archivo abre con una cabecera `-- ═══ Ferddo · NNNN · <título> ═══` y
 explica **por qué** existe, no solo qué hace. Idempotente donde se pueda
