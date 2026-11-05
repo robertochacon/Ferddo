@@ -172,6 +172,8 @@ Pantallas (todas con permisos y módulos, tabla en `lg` y lista en móvil): Inic
 
 Acceso rápido de desarrollo (2026-11-04): con `npm run dev` el login muestra «Entrar como admin» (super-admin) y «Entrar como usuario» (cuenta con negocio), con credenciales de `.env.local` (`VITE_DEV_ADMIN_*`, `VITE_DEV_USER_*`). `src/pages/auth/DevQuickLogin.tsx` se carga con `import()` detrás de `import.meta.env.DEV || VITE_QUICK_LOGIN === 'true'`: sin la variable, `vite build` no lo emite. Cuentas en el proyecto real: `rchacon+ferddo-admin@…` (super-admin, sin negocio) y `rchacon+ferddo-user@…` (owner de «Negocio de prueba (dev)»). **Publicado a propósito en GitHub Pages** (variable de repo `VITE_QUICK_LOGIN=true` + secrets `VITE_DEV_*`): las contraseñas son públicas en el bundle, incluida la del super-admin.
 
+Errores de red (2026-11-05): `errorMessage()` traduce el fallo de fetch de cada navegador («Failed to fetch», «Load failed», «NetworkError…») a «No hay conexión con el servidor…» en vez de mostrar el TypeError crudo (se veía en el modal de cobro del POS). Pruebas en `src/lib/errors.test.ts`.
+
 Limitaciones conocidas: archivos reemplazados en Storage (imágenes, adjuntos abandonados) no se borran; el historial de compras del cliente depende de `sales.view_all`; el certificado .p12 no se inspecciona (solo se cifra y guarda).
 
 ## 11. Pendiente de configuración externa
