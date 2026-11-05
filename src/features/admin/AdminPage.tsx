@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Activity, AlertTriangle, ArrowRight, Ban, BellRing, Building2, Check, Eye, FileCheck2, LogIn,
-  Pencil, Play, Receipt, RefreshCw, Search, ShieldCheck, ShieldPlus, SlidersHorizontal, Store, Trash2,
+  Pencil, Phone, Play, Receipt, RefreshCw, Search, ShieldCheck, ShieldPlus, SlidersHorizontal, Store, Trash2,
   UserRound, Users,
 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthProvider'
@@ -628,6 +628,18 @@ function PurgeLogCard() {
   )
 }
 
+/**
+ * El teléfono se guarda solo con dígitos; se muestra agrupado para leerlo.
+ * 10 dígitos (RD/NANP): 809 555 0199. Otros largos, tal cual.
+ */
+function formatPhone(raw: string): string {
+  const d = raw.replace(/\D/g, '')
+  const plus = raw.startsWith('+') ? '+' : ''
+  if (d.length === 10) return `${plus}${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`
+  if (d.length === 11 && d.startsWith('1')) return `${plus}1 ${d.slice(1, 4)} ${d.slice(4, 7)} ${d.slice(7)}`
+  return raw
+}
+
 // ── Super-admins de plataforma ───────────────────────────────────────────────
 
 function SuperAdminsCard() {
@@ -683,7 +695,17 @@ function SuperAdminsCard() {
                   {a.user_id === user?.id && <Badge tone="brand">Tú</Badge>}
                   {a.note && <Badge>{a.note}</Badge>}
                 </p>
-                {a.full_name && <p className="truncate text-xs text-slate-500">{a.email}</p>}
+                {(a.full_name || a.phone) && (
+                  <p className="flex flex-wrap gap-x-3 text-xs text-slate-500">
+                    {a.full_name && <span className="truncate">{a.email}</span>}
+                    {/* Enlace tel: en el teléfono se llama con un toque. */}
+                    {a.phone && (
+                      <a href={`tel:${a.phone}`} className="inline-flex items-center gap-1 font-medium text-brand-600 hover:underline">
+                        <Phone className="h-3 w-3" /> {formatPhone(a.phone)}
+                      </a>
+                    )}
+                  </p>
+                )}
                 <p className="text-xs text-slate-400">
                   {a.last_sign_in_at ? `Último acceso ${fmtDateTime(a.last_sign_in_at)}` : 'Nunca ha entrado'}
                   {` · desde ${fmtDate(a.created_at)}`}

@@ -191,6 +191,13 @@ begin
                                and e ->> 'note' = 'Soporte nivel 1'), 'nombre y nota editados (y recortados)');
   perform pg_temp.ok(exists (select 1 from platform_audit_logs where action = 'platform_admin.update'
                              and meta -> 'changes' ? 'full_name' and actor_id = ud), 'la edición queda en la bitácora');
+  -- El teléfono lo guarda cada quien en su cuenta (Mi perfil); la lista lo muestra (0032).
+  perform set_config('role', 'postgres', true);
+  update auth.users set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || '{"phone":"8095550199"}' where id = ud;
+  perform pg_temp.act_as(ud);
+  perform pg_temp.ok(exists (select 1 from jsonb_array_elements(public.admin_list_platform_admins()) e
+                             where (e ->> 'user_id')::uuid = ud and e ->> 'phone' = '8095550199'),
+                     'la lista de super-admins trae el teléfono');
   perform pg_temp.expect_error($q$select public.admin_update_platform_admin('$q$ || ua || $q$', 'X', null)$q$, 'no es super-admin');
   perform pg_temp.expect_error($q$select public.admin_update_platform_admin('$q$ || ud || $q$', repeat('x', 81), null)$q$, '80 caracteres');
   perform pg_temp.act_as(ua);

@@ -1,10 +1,13 @@
-import type { ReactNode } from 'react'
+import { isValidElement, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle, ArrowRight, BarChart3, BookOpen, Building2, CreditCard, FileCheck2, History, LifeBuoy,
-  ShieldCheck, UserRound, type LucideIcon,
+  Search, SearchX, ShieldCheck, UserRound, X, type LucideIcon,
 } from 'lucide-react'
 import { Card, CardBody } from '@/components/ui/Card'
+import { Input } from '@/components/ui/Input'
+import { EmptyState } from '@/components/ui/misc'
+import { norm } from '@/lib/format'
 import { AdminShell } from './AdminShell'
 
 /**
@@ -129,7 +132,7 @@ const SECTIONS: GuideSection[] = [
     items: [
       <><b>Agregar</b>: escribe el correo de una cuenta que ya exista y que no pertenezca a ningún negocio; opcionalmente, su función (Soporte, Facturación…).</>,
       <><b>Editar</b> (lápiz): cambia su nombre y su función. El correo no se cambia aquí porque es su acceso.</>,
-      <>La lista muestra el último acceso de cada uno: útil para retirar cuentas que ya no se usan.</>,
+      <>La lista muestra el teléfono de cada uno (el que guarda en su «Mi perfil»; en el móvil se llama con un toque) y su último acceso, útil para retirar cuentas que ya no se usan.</>,
       <><b>Quitar</b> le retira el acceso al panel. Siempre queda al menos uno: la base rechaza quitar al último.</>,
     ],
     caution: <>Un super-admin puede borrar negocios enteros. Da este acceso solo a quien lo necesite y retíralo cuando deje de necesitarlo.</>,
@@ -141,7 +144,7 @@ const SECTIONS: GuideSection[] = [
     icon: UserRound,
     summary: 'Tus datos y la seguridad de tu cuenta.',
     items: [
-      <>Cambia tu nombre y tu teléfono; el resto del equipo ve tu nombre en la lista de super-admins y en tus notas.</>,
+      <>Cambia tu nombre y tu teléfono; el resto del equipo los ve en la lista de super-admins, y tu nombre en tus notas.</>,
       <>Para cambiar la contraseña te pedimos la actual: así nadie que encuentre tu sesión abierta puede dejarte fuera.</>,
       <>«Cerrar las otras sesiones» desconecta los demás dispositivos y conserva el actual. Úsalo si entraste desde un equipo ajeno.</>,
     ],
@@ -149,8 +152,67 @@ const SECTIONS: GuideSection[] = [
   },
 ]
 
+// ── Búsqueda ─────────────────────────────────────────────────────────────────
+
+/** Texto plano de un nodo de React: los puntos de la guía llevan <b> y <code>. */
+function nodeText(node: ReactNode): string {
+  if (node == null || typeof node === 'boolean') return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(nodeText).join('')
+  if (isValidElement(node)) return nodeText((node.props as { children?: ReactNode }).children)
+  return ''
+}
+
+/** Como `norm()` y además sin tildes: «facturacion» encuentra «Facturación». */
+const fold = (s: string) => norm(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+/** Lo que se pinta de una sección tras buscar: entera, o solo los puntos que coinciden. */
+interface Visible {
+  section: GuideSection
+  items: ReactNode[]
+  showCaution: boolean
+  /** Coincidencias, para el contador. */
+  hits: number
+}
+
+function search(query: string): Visible[] {
+  const words = fold(query).split(' ').filter(Boolean)
+  if (!words.length) {
+    return SECTIONS.map((section) => ({ section, items: section.items, showCaution: true, hits: 0 }))
+  }
+  // Todas las palabras, en cualquier orden: «cambiar proveedor» encuentra
+  // «cambiar el proveedor de un negocio».
+  const matches = (text: string) => {
+    const t = fold(text)
+    return words.every((w) => t.includes(w))
+  }
+  const out: Visible[] = []
+  for (const section of SECTIONS) {
+    const items = section.items.filter((it) => matches(nodeText(it)))
+    const caution = section.caution != null && matches(nodeText(section.caution))
+    // Si coincide el módulo en sí (título o resumen), se enseña entero: quien
+    // busca «bitácora» quiere leer toda la sección, no un punto suelto.
+    if (matches(`${section.title} ${section.summary}`)) {
+      out.push({ section, items: section.items, showCaution: true, hits: 1 + items.length + Number(caution) })
+    } else if (items.length || caution) {
+      out.push({ section, items, showCaution: caution, hits: items.length + Number(caution) })
+    }
+  }
+  return out
+}
+
 export function AdminGuidePage() {
+  const [query, setQuery] = useState('')
+  const visible = useMemo(() => search(query), [query])
+  const searching = Boolean(fold(query))
+  const hits = visible.reduce((n, v) => n + v.hits, 0)
   const go = (id: string) => document.getElementById(`guia-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // Buscar el título filtraría también otros módulos que lo mencionan: se quita
+  // la búsqueda y se salta a la sección, ya completa, cuando React la pinte.
+  const showWhole = (id: string) => {
+    setQuery('')
+    requestAnimationFrame(() => go(id))
+  }
 
   return (
     <AdminShell section="guia" title="Guía de uso">
@@ -167,20 +229,57 @@ export function AdminGuidePage() {
               </p>
             </div>
           </div>
-          {/* Índice: salta a cada módulo de esta misma página. */}
-          <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-            {SECTIONS.map((s) => (
-              <button key={s.id} type="button" onClick={() => go(s.id)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-brand-300 hover:text-brand-700">
-                <s.icon className="h-3.5 w-3.5" /> {s.title}
+          <div className="relative border-t border-slate-100 pt-3">
+            <Search className="pointer-events-none absolute left-3 top-[calc(50%+6px)] h-4 w-4 -translate-y-1/2 text-slate-400" />
+            {/* type="text" y no "search": este último añade su propia X en Chrome/Safari
+                y quedaban dos botones de borrar. */}
+            <Input
+              type="text"
+              role="searchbox"
+              enterKeyHint="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar en la guía: contraseña, suspender, proveedor…"
+              aria-label="Buscar en la guía"
+              className="pl-9 pr-10"
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery('')} aria-label="Borrar búsqueda"
+                className="absolute right-2 top-[calc(50%+6px)] -translate-y-1/2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                <X className="h-4 w-4" />
               </button>
-            ))}
+            )}
           </div>
+          {searching && (
+            <p className="text-xs text-slate-500" aria-live="polite">
+              {hits ? `${hits} coincidencia${hits === 1 ? '' : 's'} en ${visible.length} módulo${visible.length === 1 ? '' : 's'}` : 'Sin coincidencias'}
+            </p>
+          )}
+          {/* Índice: salta a cada módulo de esta misma página (solo los que tienen resultados). */}
+          {visible.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {visible.map(({ section: s }) => (
+                <button key={s.id} type="button" onClick={() => go(s.id)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-brand-300 hover:text-brand-700">
+                  <s.icon className="h-3.5 w-3.5" /> {s.title}
+                </button>
+              ))}
+            </div>
+          )}
         </CardBody>
       </Card>
 
+      {visible.length === 0 && (
+        <Card>
+          <CardBody>
+            <EmptyState icon={<SearchX className="h-6 w-6" />} title="No encontramos eso en la guía"
+              description="Prueba con otra palabra, por ejemplo el nombre del módulo o la acción: «suspender», «contraseña», «migrar»." />
+          </CardBody>
+        </Card>
+      )}
+
       <div className="space-y-4">
-        {SECTIONS.map((s) => (
+        {visible.map(({ section: s, items, showCaution }) => (
           <Card key={s.id} id={`guia-${s.id}`} className="scroll-mt-20">
             <CardBody className="space-y-3">
               <div className="flex items-start gap-3">
@@ -190,10 +289,20 @@ export function AdminGuidePage() {
                   <p className="text-sm text-slate-500">{s.summary}</p>
                 </div>
               </div>
-              <ul className="list-disc space-y-1.5 pl-5 text-sm text-slate-700">
-                {s.items.map((item, i) => <li key={i}>{item}</li>)}
-              </ul>
-              {s.caution && (
+              {items.length > 0 && (
+                <ul className="list-disc space-y-1.5 pl-5 text-sm text-slate-700">
+                  {items.map((item, i) => <li key={i}>{item}</li>)}
+                </ul>
+              )}
+              {searching && items.length < s.items.length && (
+                <p className="text-xs text-slate-400">
+                  {s.items.length - items.length} punto(s) más en esta sección.{' '}
+                  <button type="button" onClick={() => showWhole(s.id)} className="font-medium text-brand-600 hover:underline">
+                    Ver la sección completa
+                  </button>
+                </p>
+              )}
+              {s.caution && showCaution && (
                 <p className="flex gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{s.caution}</span>

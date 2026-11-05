@@ -257,6 +257,8 @@ export interface PlatformAdminRow {
   email: string | null
   /** `auth.users.raw_user_meta_data.full_name` (0030). */
   full_name: string | null
+  /** El que cada quien guarda en «Mi perfil» (`user_metadata.phone`, 0032). Solo dígitos. */
+  phone: string | null
   /** Para qué está en el equipo: «Soporte», «Facturación»… */
   note: string | null
   created_at: string

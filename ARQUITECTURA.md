@@ -256,7 +256,7 @@ admin_migrate_ecf_provider(p_from text, p_to text, p_reason text) returns jsonb 
 El super-admin no suele tener fila en `profiles`: su **nombre y teléfono** viven en
 `auth.users.raw_user_meta_data` (`full_name`, `phone`), que cada quien edita con su
 propia sesión (`supabase.auth.updateUser({ data })`, hook `useUpdateAccountData`).
-El nombre es el que lee `admin_list_platform_admins` (0030). Rutas del panel fuera
+El nombre (0030) y el teléfono (0032) son los que devuelve `admin_list_platform_admins`. Rutas del panel fuera
 del menú principal: `/admin/perfil` (datos, contraseña —pide la actual— y cerrar
 otras sesiones) y `/admin/guia` (guía de uso de cada módulo, texto en
 `AdminGuidePage.tsx`: si un módulo cambia, su sección cambia en el mismo commit).
@@ -670,6 +670,7 @@ Se entregan **los dos** destinos:
 0029_support_revoke.sql    cortar el soporte (set_member_active) borra la fila y lo registra
 0030_edit_platform_admins.sql admin_update_platform_admin + nombre y último acceso en la lista
 0031_ecf_providers.sql     catálogo ecf_providers + FK, cambio de proveedor con reasignación, RPC del panel
+0032_platform_admins_phone.sql teléfono (user_metadata) en admin_list_platform_admins
 ```
 Cada archivo abre con una cabecera `-- ═══ Ferddo · NNNN · <título> ═══` y
 explica **por qué** existe, no solo qué hace. Idempotente donde se pueda
