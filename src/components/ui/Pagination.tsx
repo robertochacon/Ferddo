@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
@@ -111,4 +111,23 @@ export function paginate<T>(
   const safePage = Math.min(Math.max(0, page), pages - 1)
   const from = safePage * pageSize
   return { slice: rows.slice(from, from + pageSize), safePage, pages }
+}
+
+/**
+ * `paginate` con su estado incluido, para listas ya cargadas. Devuelve la
+ * página recortada y `pager`, que se pasa tal cual a <Pagination {...pager} />.
+ *
+ * Es un hook: va al principio del componente, antes de cualquier `return`
+ * temprano, con `rows` ya filtradas (o `[]` mientras cargan). Quien tenga
+ * filtros llama `reset()` al cambiarlos, para volver a la primera página en vez
+ * de quedarse en la 3 de un resultado distinto.
+ */
+export function usePaged<T>(rows: T[], pageSize = 25) {
+  const [page, setPage] = useState(0)
+  const { slice, safePage } = paginate(rows, page, pageSize)
+  return {
+    slice,
+    reset: () => setPage(0),
+    pager: { page: safePage, pageSize, total: rows.length, onPage: setPage },
+  }
 }

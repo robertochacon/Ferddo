@@ -9,6 +9,7 @@ import { Field, Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { Avatar, EmptyState, PageLoader } from '@/components/ui/misc'
+import { Pagination, usePaged } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/toast'
 import { useAuth } from '@/auth/AuthProvider'
 import { useBranches } from '@/hooks/core'
@@ -68,6 +69,7 @@ function MembersCard() {
   const [editing, setEditing] = useState<TeamMemberRow | null>(null)
 
   const rows = members.data ?? []
+  const paged = usePaged(rows)
   const branchList = branches.data ?? []
   const activeCount = rows.filter((m) => m.is_active).length
 
@@ -159,7 +161,7 @@ function MembersCard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {rows.map((m) => (
+                {paged.slice.map((m) => (
                   <tr key={m.user_id} className={cn(!m.is_active && 'bg-slate-50/60')}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -188,7 +190,7 @@ function MembersCard() {
             </table>
           </div>
           <DataList>
-            {rows.map((m) => (
+            {paged.slice.map((m) => (
               <DataRow
                 key={m.user_id}
                 leading={<Avatar name={m.full_name ?? m.email} size="sm" />}
@@ -205,6 +207,7 @@ function MembersCard() {
               </DataRow>
             ))}
           </DataList>
+          <Pagination {...paged.pager} label="miembros" />
         </>
       )}
 

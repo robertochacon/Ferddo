@@ -13,6 +13,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Segmented } from '@/components/ui/Segmented'
 import { StatCard } from '@/components/ui/StatCard'
 import { EmptyState, PageLoader, Spinner } from '@/components/ui/misc'
+import { Pagination, usePaged } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/toast'
 import { useSuppliers } from '@/hooks/core'
 import { useOpenPayables, usePayPayables, useSupplierPayments } from '@/hooks/payables'
@@ -86,6 +87,9 @@ function PayablesContent() {
     return [...map.values()].sort((a, b) => b.overdue - a.overdue || b.balance - a.balance)
   }, [payables.data, supplierName])
 
+  // Se pagina por proveedor (una tarjeta cada uno), no por cuenta: partir un
+  // proveedor entre dos páginas escondería parte de lo que se le debe.
+  const groupPage = usePaged(groups, 10)
   const total = round2(groups.reduce((s, g) => s + g.balance, 0))
   const overdue = round2(groups.reduce((s, g) => s + g.overdue, 0))
   const all = payables.data ?? []
@@ -143,7 +147,7 @@ function PayablesContent() {
           />
         ) : (
           <div className="space-y-4">
-            {groups.map((g) => (
+            {groupPage.slice.map((g) => (
               <Card key={g.supplierId || 'none'}>
                 <CardHeader
                   title={g.name}
@@ -242,6 +246,7 @@ function PayablesContent() {
                 </DataList>
               </Card>
             ))}
+            <Pagination {...groupPage.pager} label="proveedores" className="border-t-0 px-0" />
           </div>
         ))}
 
@@ -254,6 +259,7 @@ function PayablesContent() {
 
 function PaymentsHistory({ supplierName, currency }: { supplierName: Map<string, string>; currency: string }) {
   const payments = useSupplierPayments()
+  const paged = usePaged(payments.data ?? [])
   if (payments.isLoading) return <div className="flex justify-center p-8"><Spinner /></div>
   if (payments.isError) return <p className="text-sm text-red-600">{errorMessage(payments.error)}</p>
   const rows = payments.data ?? []
@@ -277,7 +283,7 @@ function PaymentsHistory({ supplierName, currency }: { supplierName: Map<string,
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {rows.map((p) => (
+            {paged.slice.map((p) => (
               <tr key={p.id}>
                 <td className="px-4 py-3 font-medium text-slate-800">{p.number}</td>
                 <td className="px-4 py-3 text-slate-600">{fmtDateTime(p.created_at)}</td>
@@ -291,7 +297,7 @@ function PaymentsHistory({ supplierName, currency }: { supplierName: Map<string,
         </table>
       </div>
       <DataList>
-        {rows.map((p) => (
+        {paged.slice.map((p) => (
           <DataRow key={p.id} title={`${p.number} · ${nameOf(p.supplier_id)}`} titleExtra={fmtDateTime(p.created_at)}>
             <DataFields>
               <DataField label="Monto">{money(p.amount, currency)}</DataField>
@@ -300,6 +306,7 @@ function PaymentsHistory({ supplierName, currency }: { supplierName: Map<string,
           </DataRow>
         ))}
       </DataList>
+      <Pagination {...paged.pager} label="pagos" />
     </Card>
   )
 }

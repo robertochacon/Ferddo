@@ -14,7 +14,7 @@ import { Card } from '@/components/ui/Card'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
 import { Field, Input, Textarea } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { Pagination, paginate } from '@/components/ui/Pagination'
+import { Pagination, paginate, usePaged } from '@/components/ui/Pagination'
 import { Segmented } from '@/components/ui/Segmented'
 import { EmptyState, PageLoader, Spinner } from '@/components/ui/misc'
 import { useToast } from '@/components/ui/toast'
@@ -424,6 +424,12 @@ function SupplierDetailModal({
 
   const loading = { purchases: purchases.isLoading, payables: payables.isLoading, payments: payments.isLoading }[tab]
   const error = { purchases: purchases.error, payables: payables.error, payments: payments.error }[tab]
+  // 10 por página: es un modal, una lista más larga obliga a desplazarse dentro.
+  const purchasePage = usePaged(purchases.data ?? [], 10)
+  const payablePage = usePaged(payables.data ?? [], 10)
+  const paymentPage = usePaged(payments.data ?? [], 10)
+  const pager = { purchases: purchasePage.pager, payables: payablePage.pager, payments: paymentPage.pager }[tab]
+  const pagerLabel = { purchases: 'compras', payables: 'cuentas', payments: 'pagos' }[tab]
 
   return (
     <Modal open onClose={onClose} size="lg" title={supplier.name}>
@@ -463,7 +469,7 @@ function SupplierDetailModal({
             ((purchases.data ?? []).length === 0 ? (
               <Empty text="Sin compras registradas." />
             ) : (
-              (purchases.data ?? []).map((p) => (
+              purchasePage.slice.map((p) => (
                 <li key={p.id} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
                   <div className="min-w-0">
                     {canOpenPurchases ? (
@@ -489,7 +495,7 @@ function SupplierDetailModal({
             ((payables.data ?? []).length === 0 ? (
               <Empty text="Sin cuentas por pagar." />
             ) : (
-              (payables.data ?? []).map((p) => {
+              payablePage.slice.map((p) => {
                 const late = p.status === 'open' && daysOverdue(p.due_date) > 0
                 return (
                   <li key={p.id} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
@@ -513,7 +519,7 @@ function SupplierDetailModal({
             ((payments.data ?? []).length === 0 ? (
               <Empty text="Sin pagos registrados." />
             ) : (
-              (payments.data ?? []).map((p) => (
+              paymentPage.slice.map((p) => (
                 <li key={p.id} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
                   <div className="min-w-0">
                     <p className="font-medium text-slate-800">{p.number}</p>
@@ -528,6 +534,7 @@ function SupplierDetailModal({
             ))}
         </ul>
       )}
+      {!loading && !error && <Pagination {...pager} label={pagerLabel} className="border-t-0 px-0" />}
     </Modal>
   )
 }

@@ -8,6 +8,7 @@ import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataLi
 import { Field, Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { EmptyState, PageLoader } from '@/components/ui/misc'
+import { Pagination, usePaged } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/toast'
 import { useTaxes } from '@/hooks/core'
 import { useSaveTax, useSetDefaultTax, useSetTaxActive } from '@/hooks/settings'
@@ -77,6 +78,7 @@ export function TaxesSettings() {
   }
 
   const rows = taxes.data ?? []
+  const paged = usePaged(rows)
   const badges = (t: Tax) => (
     <>
       {t.is_default && <Badge tone="brand">Por defecto</Badge>}
@@ -120,7 +122,7 @@ export function TaxesSettings() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {rows.map((t) => (
+                {paged.slice.map((t) => (
                   <tr key={t.id} className={cn(!t.is_active && 'bg-slate-50/60 text-slate-400')}>
                     <td className="px-4 py-3 font-medium text-slate-800">{t.name}</td>
                     <td className="px-4 py-3 font-mono text-xs text-slate-500">{t.code}</td>
@@ -142,7 +144,7 @@ export function TaxesSettings() {
             </table>
           </div>
           <DataList>
-            {rows.map((t) => (
+            {paged.slice.map((t) => (
               <DataRow
                 key={t.id}
                 title={t.name}
@@ -157,6 +159,7 @@ export function TaxesSettings() {
               </DataRow>
             ))}
           </DataList>
+          <Pagination {...paged.pager} label="impuestos" />
         </>
       )}
       <CardBody className="border-t border-slate-100">

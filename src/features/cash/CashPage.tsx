@@ -21,6 +21,7 @@ import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataLi
 import { Field, Input, Textarea } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { EmptyState, PageLoader, Spinner } from '@/components/ui/misc'
+import { Pagination, usePaged } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/toast'
 import { useBranches, useRegisters } from '@/hooks/core'
 import { useMemberNames, useTeamMembers } from '@/hooks/team'
@@ -117,6 +118,7 @@ function CashScreen() {
   const closedRegisters = (registers.data ?? []).filter(
     (r) => r.is_active && !openRegisterIds.has(r.id) && (unrestricted || (me?.branch_ids ?? []).includes(r.branch_id)),
   )
+  const history = usePaged(closed.data ?? [])
 
   if (open.isLoading || registers.isLoading) return <PageLoader label="Cargando cajas…" />
   if (open.isError) {
@@ -235,7 +237,7 @@ function CashScreen() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {closed.data!.map((s) => {
+                  {history.slice.map((s) => {
                     const dk = diffKind(s.difference ?? 0)
                     return (
                       <tr key={s.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setViewing(s)}>
@@ -258,7 +260,7 @@ function CashScreen() {
               </table>
             </div>
             <DataList>
-              {closed.data!.map((s) => {
+              {history.slice.map((s) => {
                 const dk = diffKind(s.difference ?? 0)
                 return (
                   <DataRow
@@ -287,6 +289,7 @@ function CashScreen() {
                 )
               })}
             </DataList>
+            <Pagination {...history.pager} label="cierres" />
           </Card>
         )}
       </section>

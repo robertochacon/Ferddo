@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState, PageLoader } from '@/components/ui/misc'
+import { Pagination, usePaged } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/toast'
 import { useCategories } from '@/hooks/core'
 import { useCreateCategory, useDeleteCategory, useUpdateCategory } from '@/hooks/products'
@@ -25,6 +26,7 @@ export function CategoriesModal({ products, onClose }: { products: Product[]; on
   const [newName, setNewName] = useState('')
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Category | null>(null)
+  const paged = usePaged(categories, 10)
 
   const usage = useMemo(() => {
     const m: Record<string, number> = {}
@@ -93,7 +95,7 @@ export function CategoriesModal({ products, onClose }: { products: Product[]; on
           <EmptyState icon={<Tags className="h-6 w-6" />} title="Sin categorías" description="Agrupa tu catálogo para filtrarlo y ver la valoración por categoría." />
         ) : (
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-            {categories.map((c) => {
+            {paged.slice.map((c) => {
               const count = usage[c.id] ?? 0
               if (confirmDelete?.id === c.id) {
                 return (
@@ -160,6 +162,7 @@ export function CategoriesModal({ products, onClose }: { products: Product[]; on
             })}
           </ul>
         )}
+        {!isLoading && <Pagination {...paged.pager} label="categorías" className="border-t-0 px-0" />}
       </div>
     </Modal>
   )

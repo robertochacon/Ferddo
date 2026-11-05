@@ -19,6 +19,7 @@ import { Modal } from '@/components/ui/Modal'
 import { ActionMenu, type ActionItem } from '@/components/ui/ActionMenu'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
 import { EmptyState, Spinner } from '@/components/ui/misc'
+import { Pagination, usePaged } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/toast'
 import { ECF_STATUS } from '@/lib/labels'
 import { fmtDateTime, money } from '@/lib/format'
@@ -48,6 +49,7 @@ export function InvoicesTab({ timezone }: { timezone: string }) {
   const canRetry = can('ecf.manage')
   const currency = tenant?.currency
   const filtered = Object.values(filters).some(Boolean)
+  const paged = usePaged(invoices.data ?? [])
 
   const doRetry = (inv: ElectronicInvoice) =>
     retry.mutate(inv.id, {
@@ -66,7 +68,11 @@ export function InvoicesTab({ timezone }: { timezone: string }) {
     return items
   }
 
-  const set = <K extends keyof EcfInvoiceFilters>(k: K, v: EcfInvoiceFilters[K]) => setFilters((f) => ({ ...f, [k]: v }))
+  // Otro filtro es otro resultado: se vuelve a la primera página.
+  const set = <K extends keyof EcfInvoiceFilters>(k: K, v: EcfInvoiceFilters[K]) => {
+    setFilters((f) => ({ ...f, [k]: v }))
+    paged.reset()
+  }
 
   return (
     <div className="space-y-4">
@@ -98,7 +104,14 @@ export function InvoicesTab({ timezone }: { timezone: string }) {
           <Field label="Hasta">
             <Input type="date" value={filters.to} min={filters.from || undefined} onChange={(e) => set('to', e.target.value)} />
           </Field>
-          <Button variant="ghost" onClick={() => setFilters(EMPTY_FILTERS)} disabled={!filtered}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setFilters(EMPTY_FILTERS)
+              paged.reset()
+            }}
+            disabled={!filtered}
+          >
             <X className="h-4 w-4" /> Limpiar
           </Button>
         </CardBody>
@@ -144,7 +157,7 @@ export function InvoicesTab({ timezone }: { timezone: string }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {invoices.data.map((inv) => (
+                {paged.slice.map((inv) => (
                   <tr key={inv.id} className="align-top hover:bg-slate-50/60">
                     <td className="px-4 py-3">
                       <button
@@ -197,7 +210,7 @@ export function InvoicesTab({ timezone }: { timezone: string }) {
             </table>
           </div>
           <DataList>
-            {invoices.data.map((inv) => (
+            {paged.slice.map((inv) => (
               <DataRow
                 key={inv.id}
                 title={<span className="font-mono">{inv.encf}</span>}
@@ -226,6 +239,7 @@ export function InvoicesTab({ timezone }: { timezone: string }) {
               </DataRow>
             ))}
           </DataList>
+          <Pagination {...paged.pager} label="comprobantes" />
           {invoices.data.length >= ECF_LIST_LIMIT && (
             <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
               Se muestran los {ECF_LIST_LIMIT} más recientes. Usa los filtros para acotar la búsqueda.

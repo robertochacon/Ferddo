@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
+import { Pagination, usePaged } from '@/components/ui/Pagination'
 import { Segmented } from '@/components/ui/Segmented'
 import { StatCard } from '@/components/ui/StatCard'
 import { EmptyState, PageLoader, Spinner } from '@/components/ui/misc'
@@ -56,6 +57,10 @@ export function CustomerDetailPage() {
   const openRcv = useMemo(() => (receivables.data ?? []).filter((r) => r.status === 'open'), [receivables.data])
   const balance = round2(openRcv.reduce((s, r) => s + balanceOf(r), 0))
   const overdue = round2(openRcv.filter(isOverdue).reduce((s, r) => s + balanceOf(r), 0))
+  // Una página por pestaña: cada una conserva la suya al ir y volver.
+  const rcvPage = usePaged(receivables.data ?? [])
+  const payPage = usePaged(payments.data ?? [])
+  const salePage = usePaged(sales.data ?? [])
 
   if (customer.isLoading) return <PageLoader label="Cargando cliente…" />
   if (customer.isError || !customer.data) {
@@ -195,7 +200,7 @@ export function CustomerDetailPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {(receivables.data ?? []).map((r) => (
+                    {rcvPage.slice.map((r) => (
                       <tr key={r.id} className={isOverdue(r) ? 'bg-red-50/40' : undefined}>
                         <td className="px-4 py-3 text-slate-700">
                           {r.sale_id ? (
@@ -229,7 +234,7 @@ export function CustomerDetailPage() {
                 </table>
               </div>
               <DataList>
-                {(receivables.data ?? []).map((r) => (
+                {rcvPage.slice.map((r) => (
                   <DataRow
                     key={r.id}
                     title={r.description ?? 'Cuenta'}
@@ -252,6 +257,7 @@ export function CustomerDetailPage() {
                   </DataRow>
                 ))}
               </DataList>
+              <Pagination {...rcvPage.pager} label="cuentas" />
             </>
           )}
         </Card>
@@ -281,7 +287,7 @@ export function CustomerDetailPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {(payments.data ?? []).map((p) => (
+                    {payPage.slice.map((p) => (
                       <tr key={p.id}>
                         <td className="px-4 py-3 font-medium text-slate-700">{p.number}</td>
                         <td className="px-4 py-3 text-slate-600">{fmtDateTime(p.created_at)}</td>
@@ -295,7 +301,7 @@ export function CustomerDetailPage() {
                 </table>
               </div>
               <DataList>
-                {(payments.data ?? []).map((p) => (
+                {payPage.slice.map((p) => (
                   <DataRow key={p.id} title={p.number} titleExtra={fmtDateTime(p.created_at)}>
                     <DataFields>
                       <DataField label="Monto">{money(p.amount, currency)}</DataField>
@@ -305,6 +311,7 @@ export function CustomerDetailPage() {
                   </DataRow>
                 ))}
               </DataList>
+              <Pagination {...payPage.pager} label="abonos" />
             </>
           )}
         </Card>
@@ -333,7 +340,7 @@ export function CustomerDetailPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {(sales.data ?? []).map((s) => (
+                    {salePage.slice.map((s) => (
                       <tr key={s.id} className="hover:bg-slate-50/60">
                         <td className="px-4 py-3">
                           <Link to={`/ventas/${s.id}`} className="font-medium text-slate-800 hover:text-brand-600">
@@ -354,7 +361,7 @@ export function CustomerDetailPage() {
                 </table>
               </div>
               <DataList>
-                {(sales.data ?? []).map((s) => (
+                {salePage.slice.map((s) => (
                   <DataRow
                     key={s.id}
                     title={s.number}
@@ -369,6 +376,7 @@ export function CustomerDetailPage() {
                   </DataRow>
                 ))}
               </DataList>
+              <Pagination {...salePage.pager} label="ventas" />
             </>
           )}
         </Card>

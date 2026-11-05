@@ -23,6 +23,7 @@ import { Select } from '@/components/ui/Select'
 import { Segmented } from '@/components/ui/Segmented'
 import { StatCard } from '@/components/ui/StatCard'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
+import { Pagination, usePaged } from '@/components/ui/Pagination'
 import { EmptyState, Spinner } from '@/components/ui/misc'
 import { DailySalesChart, BarList } from '@/features/reports/charts'
 import { downloadCsv, toCsv } from '@/lib/csv'
@@ -186,6 +187,11 @@ function ReportTable<T>({
   footer?: ReactNode
 }) {
   const [first, ...rest] = columns
+  // La pantalla pagina; el CSV exporta siempre TODAS las filas del período.
+  const paged = usePaged(rows)
+  // rowKey recibe el índice absoluto, no el de la página: si no, dos filas de
+  // páginas distintas comparten clave cuando rowKey se apoya en el índice.
+  const offset = paged.pager.page * paged.pager.pageSize
   const exportCsv = () => {
     const raw = rows.map((r) => Object.fromEntries(columns.map((c) => [c.key, c.value(r)])))
     downloadCsv(filename, toCsv(raw, columns.map((c) => ({ key: c.key, label: c.label }))))
@@ -219,8 +225,8 @@ function ReportTable<T>({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.map((r, i) => (
-                  <tr key={rowKey(r, i)} className="hover:bg-slate-50/60">
+                {paged.slice.map((r, i) => (
+                  <tr key={rowKey(r, offset + i)} className="hover:bg-slate-50/60">
                     {columns.map((c) => (
                       <td
                         key={c.key}
@@ -235,8 +241,8 @@ function ReportTable<T>({
             </table>
           </div>
           <DataList>
-            {rows.map((r, i) => (
-              <DataRow key={rowKey(r, i)} title={first.render ? first.render(r) : first.value(r)}>
+            {paged.slice.map((r, i) => (
+              <DataRow key={rowKey(r, offset + i)} title={first.render ? first.render(r) : first.value(r)}>
                 {rest.length > 0 && (
                   <DataFields>
                     {rest.map((c) => (
@@ -249,6 +255,7 @@ function ReportTable<T>({
               </DataRow>
             ))}
           </DataList>
+          <Pagination {...paged.pager} label="filas" />
         </>
       )}
       {footer && <div className="border-t border-slate-100 px-5 py-3 text-sm">{footer}</div>}

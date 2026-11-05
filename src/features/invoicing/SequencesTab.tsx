@@ -11,6 +11,7 @@ import { Select } from '@/components/ui/Select'
 import { ActionMenu } from '@/components/ui/ActionMenu'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
 import { EmptyState, Spinner } from '@/components/ui/misc'
+import { Pagination, usePaged } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/toast'
 import { cn } from '@/lib/cn'
 import { errorMessage } from '@/lib/errors'
@@ -72,6 +73,7 @@ export function SequencesTab({ timezone }: { timezone: string }) {
   const setActive = useSetSequenceActive()
   const toast = useToast()
   const today = dayIn(timezone)
+  const paged = usePaged(seqs.data ?? [])
 
   const toggle = (s: FiscalSequence) =>
     setActive.mutate(
@@ -127,7 +129,7 @@ export function SequencesTab({ timezone }: { timezone: string }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {seqs.data.map((s) => {
+                {paged.slice.map((s) => {
                   const st = SEQ_STATE[stateOf(s, today)]
                   return (
                     <tr key={s.id} className="align-top">
@@ -171,7 +173,7 @@ export function SequencesTab({ timezone }: { timezone: string }) {
             </table>
           </div>
           <DataList>
-            {seqs.data.map((s) => {
+            {paged.slice.map((s) => {
               const st = SEQ_STATE[stateOf(s, today)]
               return (
                 <DataRow
@@ -211,6 +213,7 @@ export function SequencesTab({ timezone }: { timezone: string }) {
               )
             })}
           </DataList>
+          <Pagination {...paged.pager} label="secuencias" />
         </Card>
       )}
     </div>

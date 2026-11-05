@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
 import { Input } from '@/components/ui/Input'
-import { Pagination, paginate } from '@/components/ui/Pagination'
+import { Pagination, paginate, usePaged } from '@/components/ui/Pagination'
 import { StatCard } from '@/components/ui/StatCard'
 import { EmptyState, PageLoader, Spinner } from '@/components/ui/misc'
 import { useCustomers } from '@/hooks/core'
@@ -66,6 +66,9 @@ function ReceivablesContent() {
     return all.filter((r) => norm(customerName.get(r.customer_id)).includes(q) || norm(r.description).includes(q))
   }, [all, search, customerName])
   const { slice, safePage } = paginate(rows, page, PAGE_SIZE)
+  // La fila «Total» de la antigüedad suma TODOS los clientes (agingTotals), no
+  // solo los de la página: es el total de la cartera.
+  const agingPage = usePaged(aging.data ?? [], PAGE_SIZE)
 
   const total = round2(all.reduce((s, r) => s + balanceOf(r), 0))
   const overdue = round2(all.filter((r) => daysOverdue(r.due_date) > 0).reduce((s, r) => s + balanceOf(r), 0))
@@ -139,7 +142,7 @@ function ReceivablesContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {(aging.data ?? []).map((row) => (
+                      {agingPage.slice.map((row) => (
                         <tr key={row.customer_id} className="hover:bg-slate-50/60">
                           <td className="px-4 py-3">
                             <Link to={`/clientes/${row.customer_id}`} className="font-medium text-slate-800 hover:text-brand-600">
@@ -180,7 +183,7 @@ function ReceivablesContent() {
                   </table>
                 </div>
                 <DataList>
-                  {(aging.data ?? []).map((row) => (
+                  {agingPage.slice.map((row) => (
                     <DataRow
                       key={row.customer_id}
                       title={row.customer_name}
@@ -206,6 +209,7 @@ function ReceivablesContent() {
                     </DataRow>
                   ))}
                 </DataList>
+                <Pagination {...agingPage.pager} label="clientes" />
               </>
             )}
           </Card>

@@ -174,6 +174,8 @@ Acceso rápido de desarrollo (2026-11-04): con `npm run dev` el login muestra «
 
 Errores de red (2026-11-05): `errorMessage()` traduce el fallo de fetch de cada navegador («Failed to fetch», «Load failed», «NetworkError…») a «No hay conexión con el servidor…» en vez de mostrar el TypeError crudo (se veía en el modal de cobro del POS). Pruebas en `src/lib/errors.test.ts`.
 
+Paginación (2026-11-05): todos los listados que crecen con el uso paginan en el cliente con `usePaged()` (`src/components/ui/Pagination.tsx`, 25 por página; 10 en modales y en las tarjetas por proveedor de Cuentas por pagar). Añadida a: historial de cierres de caja, detalle de cliente (cuentas, abonos, compras), comprobantes e-CF (vuelve a la página 1 al filtrar), secuencias, cuentas por pagar y pagos realizados, antigüedad de saldos (la fila Total sigue sumando toda la cartera), tablas de reportes (el CSV exporta todo), áreas y mesas, impuestos, miembros del equipo, historial del proveedor y categorías. No se paginan a propósito las líneas de un documento (venta, compra, cotización, orden de taller), la matriz de permisos, la tabla de planes, la agenda de citas ni los listados que el plan acota. Pendiente detectado: en Facturación, `Invoicing` actualiza `OfflineBar` durante el render (aviso de React «Cannot update a component while rendering…»); ya ocurría antes de la paginación.
+
 Limitaciones conocidas: archivos reemplazados en Storage (imágenes, adjuntos abandonados) no se borran; el historial de compras del cliente depende de `sales.view_all`; el certificado .p12 no se inspecciona (solo se cifra y guarda).
 
 ## 11. Pendiente de configuración externa

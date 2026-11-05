@@ -9,6 +9,7 @@ import { Field, Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
 import { EmptyState, PageLoader } from '@/components/ui/misc'
+import { Pagination, usePaged } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/toast'
 import {
   useOpenOrders,
@@ -38,6 +39,12 @@ export function AdminView({ branchId }: { branchId: string }) {
   const [areaForm, setAreaForm] = useState<RestaurantArea | 'new' | null>(null)
   const [tableForm, setTableForm] = useState<RestaurantTable | 'new' | null>(null)
 
+  // Antes de los return tempranos: los hooks de paginación no pueden saltarse.
+  const branchAreas = (areas.data ?? []).filter((a) => a.branch_id === branchId)
+  const branchTables = (tables.data ?? []).filter((t) => t.branch_id === branchId)
+  const areaPage = usePaged(branchAreas)
+  const tablePage = usePaged(branchTables)
+
   if (areas.isLoading || tables.isLoading) return <PageLoader label="Cargando el salón…" />
   if (areas.isError || tables.isError) {
     return (
@@ -59,8 +66,6 @@ export function AdminView({ branchId }: { branchId: string }) {
     )
   }
 
-  const branchAreas = (areas.data ?? []).filter((a) => a.branch_id === branchId)
-  const branchTables = (tables.data ?? []).filter((t) => t.branch_id === branchId)
   const areaName = (id: string | null) => (id ? (branchAreas.find((a) => a.id === id)?.name ?? '—') : 'Sin área')
   const busyTables = new Set((open.data ?? []).map((o) => o.table_id).filter(Boolean) as string[])
 
@@ -139,7 +144,7 @@ export function AdminView({ branchId }: { branchId: string }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {branchAreas.map((a) => (
+                  {areaPage.slice.map((a) => (
                     <tr key={a.id}>
                       <td className="px-5 py-2.5 font-medium text-slate-800">{a.name}</td>
                       <td className="px-5 py-2.5 tabular-nums">
@@ -158,7 +163,7 @@ export function AdminView({ branchId }: { branchId: string }) {
               </table>
             </div>
             <DataList>
-              {branchAreas.map((a) => (
+              {areaPage.slice.map((a) => (
                 <DataRow
                   key={a.id}
                   title={a.name}
@@ -169,6 +174,7 @@ export function AdminView({ branchId }: { branchId: string }) {
                 />
               ))}
             </DataList>
+            <Pagination {...areaPage.pager} label="áreas" />
           </>
         )}
       </Card>
@@ -205,7 +211,7 @@ export function AdminView({ branchId }: { branchId: string }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {branchTables.map((t) => (
+                  {tablePage.slice.map((t) => (
                     <tr key={t.id}>
                       <td className="px-5 py-2.5 font-medium text-slate-800">{t.name}</td>
                       <td className="px-5 py-2.5">{areaName(t.area_id)}</td>
@@ -223,7 +229,7 @@ export function AdminView({ branchId }: { branchId: string }) {
               </table>
             </div>
             <DataList>
-              {branchTables.map((t) => (
+              {tablePage.slice.map((t) => (
                 <DataRow
                   key={t.id}
                   title={t.name}
@@ -238,6 +244,7 @@ export function AdminView({ branchId }: { branchId: string }) {
                 </DataRow>
               ))}
             </DataList>
+            <Pagination {...tablePage.pager} label="mesas" />
           </>
         )}
       </Card>
