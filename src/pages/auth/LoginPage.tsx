@@ -22,9 +22,12 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-// `import()` y no import estático: en `vite build` DEV es `false`, la rama se
-// elimina y el módulo (con las credenciales de .env.local) no se emite en dist.
-const DevQuickLogin = import.meta.env.DEV ? lazy(() => import('./DevQuickLogin')) : null
+// `import()` y no import estático: cuando la condición es `false` en el build,
+// la rama se elimina y el módulo (con las credenciales) no se emite en dist.
+// VITE_QUICK_LOGIN='true' lo publica a propósito en la versión de pruebas
+// (deploy.yml): ver el aviso de seguridad en DevQuickLogin.tsx.
+const QUICK_LOGIN = import.meta.env.DEV || import.meta.env.VITE_QUICK_LOGIN === 'true'
+const DevQuickLogin = QUICK_LOGIN ? lazy(() => import('./DevQuickLogin')) : null
 
 export function LoginPage() {
   const navigate = useNavigate()

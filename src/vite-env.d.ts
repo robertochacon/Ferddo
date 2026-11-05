@@ -20,9 +20,13 @@ interface ImportMetaEnv {
    */
   readonly VITE_GOOGLE_AUTH?: string
   /**
+   * 'true' publica el acceso rápido del login también en `vite build` (versión
+   * de pruebas). Sin ella solo existe con `npm run dev`. Ver DevQuickLogin.tsx.
+   */
+  readonly VITE_QUICK_LOGIN?: string
+  /**
    * Cuentas del acceso rápido del login (src/pages/auth/DevQuickLogin.tsx).
-   * Solo se leen con `npm run dev`; en `vite build` el módulo no se emite.
-   * Van en `.env.local`, nunca en `.env.example`.
+   * Van en `.env.local` y en los secrets del repo, nunca en `.env.example`.
    */
   readonly VITE_DEV_ADMIN_EMAIL?: string
   readonly VITE_DEV_ADMIN_PASSWORD?: string

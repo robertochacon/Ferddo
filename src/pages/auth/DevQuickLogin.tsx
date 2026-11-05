@@ -8,13 +8,20 @@ import { useAuth } from '@/auth/AuthProvider'
 import { errorMessage } from '@/lib/errors'
 
 /**
- * Entrada de un clic con cuentas de prueba. SOLO en desarrollo.
+ * Entrada de un clic con cuentas de prueba, mientras la app está en desarrollo.
  *
- * Este módulo nunca llega a producción: LoginPage lo importa con `import()`
- * detrás de `import.meta.env.DEV`, que en `vite build` es el literal `false`, y
- * Rollup elimina la rama entera. Por eso las variables de abajo, aunque lleven
- * `VITE_`, no se inlinean en `dist/`. Aun así van en `.env.local` (ignorado
- * por git) y no en el código: una contraseña versionada se filtra igual.
+ * Por defecto solo existe con `npm run dev`: LoginPage lo importa con `import()`
+ * detrás de una condición que en `vite build` es el literal `false`, y Rollup
+ * elimina la rama entera, así que las credenciales no llegan a `dist/`.
+ *
+ * AVISO: con VITE_QUICK_LOGIN='true' (lo pone deploy.yml) el módulo SÍ se
+ * publica, y con él las contraseñas, legibles por cualquiera que abra el sitio.
+ * Decisión consciente mientras no hay clientes: la cuenta admin es super-admin
+ * del proyecto real. ANTES DE ABRIR A CLIENTES: quitar la variable del deploy
+ * y cambiar las contraseñas de las dos cuentas (ya se habrán filtrado).
+ *
+ * En local las credenciales van en `.env.local` (ignorado por git); en el
+ * despliegue, en los secrets del repo. Nunca en el código.
  */
 type Account = {
   key: 'admin' | 'user'
@@ -83,7 +90,7 @@ export default function DevQuickLogin() {
     <div className="mt-6 rounded-xl border border-dashed border-amber-300 bg-amber-50 p-3">
       <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700">
         <Wrench className="h-3.5 w-3.5" />
-        Acceso rápido · solo desarrollo
+        Acceso rápido · versión en desarrollo
       </p>
       <div className="grid gap-2 sm:grid-cols-2">
         {ACCOUNTS.map((account) => {

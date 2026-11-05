@@ -56,6 +56,17 @@ jobs:
           # el valor '/mi-repo/': el prefijo y el dominio se cortan juntos, y
           # equivocarlo deja la app en pantalla en blanco.
           VITE_BASE: ${{ secrets.VITE_BASE || '/' }}
+          # Acceso rápido del login (src/pages/auth/DevQuickLogin.tsx). Con la
+          # variable del repo VITE_QUICK_LOGIN=true las CONTRASEÑAS DE PRUEBA
+          # SE PUBLICAN en dist/, incluida la de un super-admin. Solo mientras
+          # no haya clientes. Para apagarlo:
+          #   gh variable delete VITE_QUICK_LOGIN   (y vuelve a desplegar)
+          # y después cambia las contraseñas de las dos cuentas.
+          VITE_QUICK_LOGIN: ${{ vars.VITE_QUICK_LOGIN }}
+          VITE_DEV_ADMIN_EMAIL: ${{ secrets.VITE_DEV_ADMIN_EMAIL }}
+          VITE_DEV_ADMIN_PASSWORD: ${{ secrets.VITE_DEV_ADMIN_PASSWORD }}
+          VITE_DEV_USER_EMAIL: ${{ secrets.VITE_DEV_USER_EMAIL }}
+          VITE_DEV_USER_PASSWORD: ${{ secrets.VITE_DEV_USER_PASSWORD }}
           # VITE_ROUTER se deja VACÍO a propósito → HashRouter (#/items).
           # GitHub Pages no sabe reescribir rutas a index.html, así que con
           # BrowserRouter cualquier enlace profundo o F5 devuelve un 404 del
