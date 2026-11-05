@@ -240,7 +240,52 @@ admin_resolve_plan_request(p_id uuid, p_approve boolean, p_note text default nul
 admin_tenant_purge_preview(p_tenant uuid) returns jsonb
 admin_delete_tenant(p_tenant uuid, p_confirm_name text, p_delete_users boolean default false) returns jsonb
 admin_list_tenant_purges(p_limit integer default 20) returns jsonb
+admin_enter_tenant(p_tenant uuid, p_reason text) returns timestamptz   -- 0028, devuelve la caducidad
+admin_exit_tenant() returns void                                        -- 0028
 ```
+
+### 3.5 Acceso de soporte («entrar como gestor», 0028)
+
+Única vía para que un super-admin vea un negocio por dentro. Es una membresía
+normal en `tenant_members` (rol `admin`, todas las sucursales) marcada con
+`support_until` (now() + 2 h) y `support_reason` (obligatorio, ≥ 5 caracteres;
+si no, `SUPPORT_REASON_REQUIRED`). Por eso toda la seguridad existente aplica
+sin excepciones nuevas:
+
+- **La caducidad la aplica `auth_tenant_id()`** (`member_is_current(support_until)`):
+  pasada la hora deja de pertenecer al negocio aunque nadie borre nada. Todo lo
+  que cuelga de ella (`auth_member_role`, `has_perm`, RLS) cae a la vez.
+- Dentro, `auth_tenant_id()` no es null ⇒ las políticas cross-tenant de 0007 no
+  le aplican: ve SOLO ese negocio.
+- **No ocupa plaza**: `enforce_member_limit`, `create_invite` y `my_plan_usage`
+  excluyen `support_until is not null`.
+- El dueño lo ve en `list_team_members()` (con caducidad y motivo) y puede
+  cortarlo con `set_member_active`, que desde la 0029 **borra** la membresía y
+  registra `support.revoke` en las dos bitácoras; **no** puede cambiarle el rol
+  (`tenant_members_support_guard` ⇒ `FORBIDDEN`).
+- Un acceso a la vez: entrar a otro negocio cierra el anterior. Entrar y salir
+  queda en `audit_logs` del negocio (`support.enter` / `support.exit`, con
+  `expired`) y en `platform_audit_logs`.
+- El super-admin no suele tener fila en `profiles`: `admin_enter_tenant` la
+  crea; `admin_exit_tenant` deja `tenant_id = null`. El cliente
+  (`AuthProvider`) cierra solo un acceso caducado al recargar el contexto.
+
+### 3.6 Bitácora de plataforma y notas internas (0028)
+
+```sql
+platform_audit_logs(id, actor_id, actor_email, action, tenant_id, tenant_name, meta jsonb, created_at)
+  -- SIN FK a tenants: sobrevive a la purga. RLS: SELECT solo super-admin; sin escritura de cliente.
+tenant_admin_notes(id, tenant_id → tenants on delete cascade, author_id default auth.uid(), body, created_at)
+  -- NO usa _setup_tenant_table a propósito: el negocio no debe leerlas.
+  -- RLS: select / insert (author_id = auth.uid()) / delete (propias) solo super-admin. Sin UPDATE.
+```
+`platform_audit_logs` la alimenta `_audit_platform_change()` (triggers AFTER en
+`subscriptions`, `tenants.suspended_at`, `tenant_members`, `platform_admins`,
+`plan_settings`, `plan_requests.status`, `tenant_purges`) cuando el autor es un
+super-admin con sesión; los cambios del propio negocio no van ahí. Las filas de
+soporte y la purga no generan líneas de miembros. El bloqueo de cuentas
+(`auth.users`, sin triggers nuestros) se registra desde `admin_set_user_banned`.
+Una RPC nueva que toque esas tablas queda auditada sin acordarse.
 
 **Invariantes obligatorias:**
 - `admin_grant_platform_admin` exige una cuenta **sin** `profiles.tenant_id`.
@@ -472,6 +517,7 @@ Revisar cada pantalla a 360 px.
 ['my-plan-request']               ['admin','overview'] ['admin','tenants']
 ['admin','members', tenantId]     ['admin','plan-requests'] ['admin','platform-admins']
 ['admin','tenant-summary', id]    ['admin','purges']
+['admin','audit', tenantId|'todas'] ['admin','notes', tenantId]       (0028)
 ```
 
 **Ferddo (ERP).** Claves añadidas — no inventes otras para estos datos:
@@ -572,6 +618,10 @@ Se entregan **los dos** destinos:
 0009_plan_settings.sql     plan_settings + topes leídos de la tabla + admin_update_plan
 0010_plan_requests.sql     plan_requests + request_plan_change + admin_list/resolve
 0011_delete_tenant.sql     tenant_purges + purge_preview + admin_delete_tenant + índices FK
+…
+0028_admin_support_audit_notes.sql  acceso de soporte (support_until), platform_audit_logs
+                           + triggers, tenant_admin_notes, filtros del tope de miembros
+0029_support_revoke.sql    cortar el soporte (set_member_active) borra la fila y lo registra
 ```
 Cada archivo abre con una cabecera `-- ═══ Ferddo · NNNN · <título> ═══` y
 explica **por qué** existe, no solo qué hace. Idempotente donde se pueda

@@ -81,6 +81,12 @@ export function fmtDateTime(value: string | Date | null | undefined): string {
   return d ? format(d, 'd MMM yyyy, h:mm a', { locale: es }) : '—'
 }
 
+/** Solo la hora: 3:20 p. m. */
+export function fmtTime(value: string | Date | null | undefined): string {
+  const d = toDate(value)
+  return d ? format(d, 'h:mm a', { locale: es }) : '—'
+}
+
 /** Día de la semana capitalizado (date-fns lo devuelve en minúscula en español). */
 export function fmtWeekday(value: string | Date | null | undefined): string {
   const d = toDate(value)

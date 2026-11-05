@@ -180,6 +180,30 @@ export interface AdminMember {
   email: string | null
   /** `auth.users.banned_until` en el futuro: la cuenta no puede iniciar sesión. */
   banned: boolean
+  /** Acceso de soporte de un super-admin (0028): hasta cuándo dura. null = miembro normal. */
+  support_until: string | null
+}
+
+/** Fila de `platform_audit_logs` (0028): lo que hizo un super-admin. */
+export interface PlatformAuditRow {
+  id: string
+  actor_id: string | null
+  actor_email: string | null
+  action: string
+  /** Sin FK a propósito: puede apuntar a un negocio ya borrado (ver `tenant_name`). */
+  tenant_id: string | null
+  tenant_name: string | null
+  meta: Record<string, unknown>
+  created_at: string
+}
+
+/** Fila de `tenant_admin_notes` (0028): nota interna del equipo Ferddo. */
+export interface TenantAdminNote {
+  id: string
+  tenant_id: string
+  author_id: string | null
+  body: string
+  created_at: string
 }
 
 /** `admin_list_platform_admins()`. */

@@ -83,6 +83,10 @@ export interface TeamMemberRow {
   full_name: string | null
   /** Solo llega a quien tiene team.manage. */
   email: string | null
+  /** Acceso de soporte de Ferddo (0028): hasta cuándo dura. null = miembro normal. */
+  support_until: string | null
+  /** Motivo del acceso de soporte. Solo llega a quien tiene team.manage. */
+  support_reason: string | null
 }
 
 // ── Empresa ─────────────────────────────────────────────────────────────────

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Activity, AlertTriangle, ArrowRight, Ban, Building2, Check, Eye, FileCheck2, LogOut, Play,
-  Receipt, RefreshCw, Search, ShieldCheck, ShieldPlus, SlidersHorizontal, Store, Trash2,
+  Activity, AlertTriangle, ArrowRight, Ban, BellRing, Building2, Check, Eye, FileCheck2, LifeBuoy, LogIn,
+  LogOut, Play, Receipt, RefreshCw, Search, ShieldCheck, ShieldPlus, SlidersHorizontal, Store, Trash2,
   UserRound, Users,
 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthProvider'
@@ -13,8 +13,9 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { Pagination, paginate, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
+import { Pagination, paginate, usePaged, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
 import { Segmented } from '@/components/ui/Segmented'
+import { Select } from '@/components/ui/Select'
 import { StatCard } from '@/components/ui/StatCard'
 import { Avatar, EmptyState, PageLoader } from '@/components/ui/misc'
 import { useToast } from '@/components/ui/toast'
@@ -28,7 +29,9 @@ import {
 } from '@/hooks/admin'
 import { useBusinessTypes } from '@/hooks/core'
 import type { AdminPlanRequestRow, AdminTenantRow, PlanCode, SubscriptionStatus } from '@/types/db'
+import { AuditLogCard } from './AuditLogCard'
 import { DeleteTenantModal } from './DeleteTenantModal'
+import { EnterSupportModal } from './EnterSupportModal'
 import { PlansCard } from './PlansCard'
 import { SUB_STATUS_LABEL, SUB_STATUS_TONE, SubscriptionEditor } from './SubscriptionEditor'
 
@@ -41,7 +44,9 @@ import { SUB_STATUS_LABEL, SUB_STATUS_TONE, SubscriptionEditor } from './Subscri
  * parte: esta pantalla trae su propio cascarón.
  *
  * Privacidad por diseño: aquí solo hay AGREGADOS (conteos, fechas, estados).
- * Ninguna RPC del panel devuelve ventas, clientes ni productos concretos.
+ * Ninguna RPC del panel devuelve ventas, clientes ni productos concretos. Para
+ * ver un negocio por dentro hay una sola puerta, «Entrar como gestor» (0028):
+ * temporal, con motivo, visible para el dueño y registrada en la bitácora.
  */
 
 const SUB_STATUSES: SubscriptionStatus[] = ['trial', 'active', 'past_due', 'canceled']
@@ -55,14 +60,22 @@ function useBusinessTypeLabels(): Record<string, string> {
 const TENANTS_PAGE_SIZE = DEFAULT_PAGE_SIZE
 const REQUESTS_PAGE_SIZE = DEFAULT_PAGE_SIZE
 
-type SectionId = 'resumen' | 'negocios' | 'planes' | 'equipo'
+type SectionId = 'resumen' | 'negocios' | 'planes' | 'bitacora' | 'equipo'
 const SECTIONS: { value: SectionId; label: string }[] = [
   { value: 'resumen', label: 'Resumen' }, { value: 'negocios', label: 'Negocios' },
-  { value: 'planes', label: 'Planes' }, { value: 'equipo', label: 'Super-admins' },
+  { value: 'planes', label: 'Planes' }, { value: 'bitacora', label: 'Bitácora' },
+  { value: 'equipo', label: 'Super-admins' },
 ]
 
+/** Filtro de estado: los de la suscripción más «suspendido», que es del negocio. */
+type StatusFilter = SubscriptionStatus | 'suspended' | ''
+
+/** Días de aviso antes de que termine una prueba. */
+const TRIAL_WARNING_DAYS = 7
+const DAY_MS = 24 * 60 * 60 * 1000
+
 export function AdminPage() {
-  const { user, plans, signOut } = useAuth()
+  const { user, plans, signOut, tenant: supportTenant, exitSupport } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
   const overview = useAdminOverview()
@@ -73,6 +86,10 @@ export function AdminPage() {
   const setSuspended = useAdminSetTenantSuspended()
 
   const [query, setQuery] = useState('')
+  const [planFilter, setPlanFilter] = useState<PlanCode | ''>('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [enterFor, setEnterFor] = useState<{ id: string; name: string } | null>(null)
   // Se guarda el ID y no la fila: al invalidar ['admin'] tras guardar, el modal
   // debe leer el plan recién escrito; con una copia se quedaba con el anterior.
   const [planForId, setPlanForId] = useState<string | null>(null)
@@ -93,13 +110,23 @@ export function AdminPage() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const list = tenants.data ?? []
-    if (!q) return list
-    return list.filter((t) =>
-      [t.name, t.owner_name ?? '', t.owner_email ?? '', t.rnc ?? '', typeLabels[t.business_type] ?? '']
-        .some((v) => v.toLowerCase().includes(q)),
-    )
-  }, [tenants.data, query, typeLabels])
+    return (tenants.data ?? []).filter((t) => {
+      if (planFilter && t.plan !== planFilter) return false
+      if (statusFilter === 'suspended' ? !t.suspended : statusFilter && t.sub_status !== statusFilter) return false
+      if (typeFilter && t.business_type !== typeFilter) return false
+      if (!q) return true
+      return [t.name, t.owner_name ?? '', t.owner_email ?? '', t.rnc ?? '', typeLabels[t.business_type] ?? '']
+        .some((v) => v.toLowerCase().includes(q))
+    })
+  }, [tenants.data, query, planFilter, statusFilter, typeFilter, typeLabels])
+  const filtered = Boolean(query.trim() || planFilter || statusFilter || typeFilter)
+  // Solo los tipos que de verdad tiene algún negocio: un filtro con opciones que
+  // siempre dan cero resultados es ruido.
+  const typesInUse = useMemo(
+    () => [...new Set((tenants.data ?? []).map((t) => t.business_type))].sort((a, b) =>
+      (typeLabels[a] ?? a).localeCompare(typeLabels[b] ?? b)),
+    [tenants.data, typeLabels],
+  )
 
   const ov = overview.data
   const planFor = planForId ? ((tenants.data ?? []).find((t) => t.id === planForId) ?? null) : null
@@ -164,6 +191,23 @@ export function AdminPage() {
         </div>
       </header>
 
+      {/* Si se vuelve al panel sin salir del modo soporte, el acceso sigue
+          abierto: se recuerda aquí para que no quede olvidado hasta que caduque. */}
+      {supportTenant && (
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-amber-500 px-4 py-1.5 text-center text-xs font-semibold text-amber-950">
+          <span className="inline-flex items-center gap-1.5">
+            <LifeBuoy className="h-3.5 w-3.5" /> Sigues dentro de {supportTenant.name} en modo soporte
+          </span>
+          <button type="button" onClick={() => navigate('/')} className="rounded-md bg-amber-950/10 px-2 py-0.5 hover:bg-amber-950/20">
+            Volver al negocio
+          </button>
+          <button type="button" onClick={() => void exitSupport().catch((err) => toast.error(errorMessage(err)))}
+            className="rounded-md bg-amber-950/10 px-2 py-0.5 hover:bg-amber-950/20">
+            Salir del modo soporte
+          </button>
+        </div>
+      )}
+
       <main className="mx-auto w-full max-w-6xl px-4 py-6">
         <Segmented value={section} onChange={setSection} options={SECTIONS} label="Secciones del panel" />
 
@@ -207,31 +251,56 @@ export function AdminPage() {
                 </div>
               )}
 
+              <AlertsCard tenants={tenants.data ?? []} plans={plans} onOpen={(id) => navigate(`/admin/negocio/${id}`)} />
               <PlanRequestsCard requests={requests.data ?? []} plans={plans} busy={resolveRequest.isPending} onResolve={resolve} />
             </>
           )}
 
           {section === 'negocios' && (
             <>
-              <div className="relative max-w-sm">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input value={query} onChange={(e) => setQuery(e.target.value)} className="pl-9"
-                  placeholder="Buscar por negocio, RNC, dueño o correo…" />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
+                <div className="relative sm:col-span-2 lg:col-span-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input value={query} onChange={(e) => setQuery(e.target.value)} className="pl-9"
+                    placeholder="Buscar por negocio, RNC, dueño o correo…" />
+                </div>
+                <Select value={planFilter} onChange={(e) => setPlanFilter(e.target.value as PlanCode | '')} aria-label="Plan">
+                  <option value="">Todos los planes</option>
+                  {planOrderFrom(plans).map((p) => <option key={p} value={p}>{plans[p].name}</option>)}
+                </Select>
+                <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} aria-label="Estado">
+                  <option value="">Todos los estados</option>
+                  {SUB_STATUSES.map((st) => <option key={st} value={st}>{SUB_STATUS_LABEL[st]}</option>)}
+                  <option value="suspended">Suspendido</option>
+                </Select>
+                <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Tipo de negocio">
+                  <option value="">Todos los tipos</option>
+                  {typesInUse.map((code) => <option key={code} value={code}>{typeLabels[code] ?? code}</option>)}
+                </Select>
               </div>
+              {filtered && (
+                <button type="button" className="mt-2 text-xs font-medium text-brand-600 hover:underline"
+                  onClick={() => { setQuery(''); setPlanFilter(''); setStatusFilter(''); setTypeFilter('') }}>
+                  Quitar filtros
+                </button>
+              )}
               <TenantsTable
-                rows={rows} query={query} plans={plans} typeLabels={typeLabels} loading={tenants.isLoading}
+                rows={rows} filtered={filtered} filterKey={`${query}|${planFilter}|${statusFilter}|${typeFilter}`}
+                plans={plans} typeLabels={typeLabels} loading={tenants.isLoading}
                 error={tenants.isError ? tenants.error : null}
                 onDetail={(id) => navigate(`/admin/negocio/${id}`)}
                 // Los usuarios se gestionan en el detalle y no en un modal aquí:
                 // una sola pantalla para roles, bloqueos y bajas.
                 onMembers={(id) => navigate(`/admin/negocio/${id}?ir=miembros`)}
                 onPlan={setPlanForId} onToggleSuspend={toggleSuspend} onDelete={setDeleteFor}
+                onEnter={(t) => setEnterFor({ id: t.id, name: t.name })}
               />
               <PurgeLogCard />
             </>
           )}
 
           {section === 'planes' && <PlansCard />}
+          {section === 'bitacora' && <AuditLogCard />}
           {section === 'equipo' && <SuperAdminsCard />}
         </div>
       </main>
@@ -251,6 +320,7 @@ export function AdminPage() {
       </Modal>
       <DeleteTenantModal tenantId={deleteFor?.id ?? null} tenantName={deleteFor?.name}
         onClose={() => setDeleteFor(null)} />
+      <EnterSupportModal tenant={enterFor} onClose={() => setEnterFor(null)} />
     </div>
   )
 }
@@ -278,6 +348,86 @@ function BreakdownCard({ title, rows }: { title: string; rows: { key: string; la
           ))
         )}
       </CardBody>
+    </Card>
+  )
+}
+
+// ── Alertas de suscripción ───────────────────────────────────────────────────
+
+type AlertKind = 'trial_ending' | 'trial_ended' | 'past_due' | 'period_ended'
+
+const ALERT_INFO: Record<AlertKind, { label: string; tone: 'amber' | 'red' }> = {
+  trial_ending: { label: 'Prueba por vencer', tone: 'amber' },
+  trial_ended: { label: 'Prueba terminada', tone: 'red' },
+  past_due: { label: 'Pago vencido', tone: 'red' },
+  period_ended: { label: 'Periodo pagado vencido', tone: 'red' },
+}
+
+/**
+ * Lo que pide una llamada: pruebas que terminan en los próximos días, pruebas
+ * ya terminadas sin pasar a pago, y cuentas vencidas. Se calcula con la lista
+ * de negocios que el panel ya tiene: no hace falta otra consulta.
+ */
+function AlertsCard({
+  tenants, plans, onOpen,
+}: {
+  tenants: AdminTenantRow[]
+  plans: Record<PlanCode, PlanInfo>
+  onOpen: (id: string) => void
+}) {
+  const alerts = useMemo(() => {
+    const now = Date.now()
+    const out: { t: AdminTenantRow; kind: AlertKind; date: string | null; at: number }[] = []
+    for (const t of tenants) {
+      if (t.suspended) continue // ya tiene quien lo atienda: se suspendió a propósito
+      const trialEnd = t.trial_ends_at ? Date.parse(t.trial_ends_at) : null
+      const periodEnd = t.current_period_end ? Date.parse(t.current_period_end) : null
+      if (t.sub_status === 'trial' && trialEnd != null) {
+        if (trialEnd < now) out.push({ t, kind: 'trial_ended', date: t.trial_ends_at, at: trialEnd })
+        else if (trialEnd - now <= TRIAL_WARNING_DAYS * DAY_MS) out.push({ t, kind: 'trial_ending', date: t.trial_ends_at, at: trialEnd })
+      } else if (t.sub_status === 'past_due') {
+        out.push({ t, kind: 'past_due', date: t.current_period_end, at: periodEnd ?? 0 })
+      } else if (t.sub_status === 'active' && periodEnd != null && periodEnd < now) {
+        out.push({ t, kind: 'period_ended', date: t.current_period_end, at: periodEnd })
+      }
+    }
+    // Lo más urgente arriba: la fecha más antigua primero.
+    return out.sort((a, b) => a.at - b.at)
+  }, [tenants])
+  const paged = usePaged(alerts)
+
+  return (
+    <Card className={alerts.length ? 'mt-6 border-amber-300' : 'mt-6'}>
+      <CardHeader
+        title={alerts.length ? `Requieren atención (${alerts.length})` : 'Suscripciones al día'}
+        subtitle={`Pruebas que terminan en ${TRIAL_WARNING_DAYS} días o menos, pruebas terminadas y cuentas vencidas`}
+      />
+      {alerts.length === 0 ? (
+        <CardBody>
+          <EmptyState icon={<BellRing className="h-5 w-5" />} title="Nada pendiente"
+            description="Ninguna prueba vence esta semana y no hay cuentas vencidas." />
+        </CardBody>
+      ) : (
+        <>
+          <ul className="divide-y divide-slate-100">
+            {paged.slice.map(({ t, kind, date }) => (
+              <li key={t.id}>
+                <button type="button" onClick={() => onOpen(t.id)}
+                  className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left hover:bg-slate-50">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-slate-800">{t.name}</span>
+                    <span className="block truncate text-xs text-slate-400">{t.owner_email ?? 'sin correo'}</span>
+                  </span>
+                  <Badge tone="brand">{t.plan ? plans[t.plan].name : '—'}</Badge>
+                  <Badge tone={ALERT_INFO[kind].tone}>{ALERT_INFO[kind].label}</Badge>
+                  <span className="w-full text-xs tabular-nums text-slate-500 sm:w-24 sm:text-right">{date ? fmtDate(date) : '—'}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <Pagination {...paged.pager} label="alertas" />
+        </>
+      )}
     </Card>
   )
 }
@@ -340,12 +490,15 @@ function PlanRequestsCard({
 // ── Negocios ─────────────────────────────────────────────────────────────────
 
 function TenantsTable({
-  rows, loading, error, query, plans, typeLabels, onDetail, onMembers, onPlan, onToggleSuspend, onDelete,
+  rows, loading, error, filtered, filterKey, plans, typeLabels, onDetail, onMembers, onPlan, onToggleSuspend, onDelete, onEnter,
 }: {
   rows: AdminTenantRow[]
   loading: boolean
   error: unknown
-  query: string
+  /** ¿Hay búsqueda o filtros? Cambia el texto de la lista vacía. */
+  filtered: boolean
+  /** Cambia con cualquier filtro: al cambiar, se vuelve a la primera página. */
+  filterKey: string
   plans: Record<PlanCode, PlanInfo>
   typeLabels: Record<string, string>
   onDetail: (id: string) => void
@@ -353,17 +506,19 @@ function TenantsTable({
   onPlan: (id: string) => void
   onToggleSuspend: (t: AdminTenantRow) => void
   onDelete: (t: AdminTenantRow) => void
+  onEnter: (t: AdminTenantRow) => void
 }) {
   const [page, setPage] = useState(0)
   const { slice, safePage } = paginate(rows, page, TENANTS_PAGE_SIZE)
-  // El buscador filtra sobre TODA la lista (ya viene entera del servidor); al
-  // cambiar el texto hay que volver a la primera página o se ve un hueco.
-  useEffect(() => setPage(0), [query])
+  // Los filtros trabajan sobre TODA la lista (ya viene entera del servidor); al
+  // cambiar cualquiera hay que volver a la primera página o se ve un hueco.
+  useEffect(() => setPage(0), [filterKey])
 
   // Una sola lista de acciones para la tabla y para las tarjetas: así una opción
   // nueva no aparece en escritorio y falta en el teléfono.
   const actionsFor = (t: AdminTenantRow): ActionItem[] => [
     { label: 'Ver detalle', icon: <Eye className="h-4 w-4" />, onClick: () => onDetail(t.id) },
+    { label: 'Entrar como gestor', icon: <LogIn className="h-4 w-4" />, hint: '2 horas, con motivo, queda registrado', onClick: () => onEnter(t) },
     { label: 'Usuarios', icon: <Users className="h-4 w-4" />, hint: 'Roles, bloqueo de acceso y bajas', onClick: () => onMembers(t.id) },
     { label: 'Suscripción', icon: <SlidersHorizontal className="h-4 w-4" />, hint: 'Plan, estado y fechas', onClick: () => onPlan(t.id) },
     t.suspended
@@ -390,8 +545,8 @@ function TenantsTable({
         <p className="p-6 text-center text-sm text-red-600">{errorMessage(error, 'No se pudieron cargar los negocios.')}</p>
       ) : rows.length === 0 ? (
         <EmptyState className="m-5" icon={<Building2 className="h-6 w-6" />}
-          title={query ? 'Sin resultados' : 'Aún no hay negocios'}
-          description={query ? 'Prueba con otro término.' : 'Cuando alguien cree su cuenta, aparecerá aquí.'} />
+          title={filtered ? 'Sin resultados' : 'Aún no hay negocios'}
+          description={filtered ? 'Prueba con otro término o quita los filtros.' : 'Cuando alguien cree su cuenta, aparecerá aquí.'} />
       ) : (
         <>
           {/* Ocho columnas no caben en un teléfono: por debajo de `lg` la tabla

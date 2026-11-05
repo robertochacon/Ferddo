@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Ban, Check, Copy, Crown, Lock, Play, Share2, ShieldCheck, Trash2, UserCog, UserPlus, Users } from 'lucide-react'
+import { Ban, Check, Copy, Crown, LifeBuoy, Lock, Play, Share2, ShieldCheck, Trash2, UserCog, UserPlus, Users } from 'lucide-react'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -24,7 +24,7 @@ import {
 } from '@/hooks/team'
 import { APP_NAME, appUrl } from '@/lib/constants'
 import { errorMessage } from '@/lib/errors'
-import { fmtDate } from '@/lib/format'
+import { fmtDate, fmtTime } from '@/lib/format'
 import { ASSIGNABLE_ROLES, ROLE_LABEL } from '@/lib/labels'
 import { cn } from '@/lib/cn'
 import type { MemberRole } from '@/types/db'
@@ -71,7 +71,8 @@ function MembersCard() {
   const rows = members.data ?? []
   const paged = usePaged(rows)
   const branchList = branches.data ?? []
-  const activeCount = rows.filter((m) => m.is_active).length
+  // El soporte de Ferddo no ocupa plaza del plan (0028): no se cuenta.
+  const activeCount = rows.filter((m) => m.is_active && !m.support_until).length
 
   const toggleActive = async (m: TeamMemberRow) => {
     const next = !m.is_active
@@ -89,6 +90,21 @@ function MembersCard() {
     // A un dueño solo lo toca otro dueño (set_member_role / set_member_active).
     const locked = m.role === 'owner' && !isOwner
     const self = m.user_id === user?.id
+    // El acceso de soporte solo se puede cortar: la base no deja cambiarle el
+    // rol, y sus sucursales son siempre todas. Cortarlo lo borra (0029); para
+    // volver, Ferddo tiene que entrar de nuevo con un motivo nuevo.
+    if (m.support_until) {
+      if (self || !m.is_active) return []
+      return [
+        {
+          label: 'Cortar acceso de soporte',
+          icon: <Ban className="h-4 w-4" />,
+          tone: 'danger',
+          hint: 'Ferddo sale de tu negocio al instante',
+          onClick: () => void toggleActive(m),
+        },
+      ]
+    }
     const items: ActionItem[] = [
       {
         label: 'Rol y sucursales',
@@ -121,14 +137,25 @@ function MembersCard() {
     return items
   }
 
-  const roleBadge = (m: TeamMemberRow) => (
+  const roleBadge = (m: TeamMemberRow) => m.support_until ? (
+    <Badge tone="amber"><LifeBuoy className="h-3 w-3" /> Soporte Ferddo</Badge>
+  ) : (
     <Badge tone={m.role === 'owner' ? 'brand' : 'slate'}>
       {m.role === 'owner' && <Crown className="h-3 w-3" />}
       {ROLE_LABEL[m.role]}
     </Badge>
   )
   const statusBadge = (m: TeamMemberRow) =>
-    m.is_active ? <Badge tone="green">Activo</Badge> : <Badge tone="slate">Inactivo</Badge>
+    !m.is_active ? (
+      <Badge tone="slate">Inactivo</Badge>
+    ) : m.support_until ? (
+      <Badge tone="amber">Hasta {fmtTime(m.support_until)}</Badge>
+    ) : (
+      <Badge tone="green">Activo</Badge>
+    )
+  // El motivo del acceso de soporte: es lo que le dice al dueño por qué entró Ferddo.
+  const supportReason = (m: TeamMemberRow) =>
+    m.support_reason ? <p className="mt-0.5 text-xs text-amber-700">Motivo: {m.support_reason}</p> : null
 
   return (
     <Card>
@@ -172,6 +199,7 @@ function MembersCard() {
                             {m.user_id === user?.id && <span className="ml-1.5 text-xs text-slate-400">(tú)</span>}
                           </p>
                           {m.email && <p className="truncate text-xs text-slate-400">{m.email}</p>}
+                          {supportReason(m)}
                         </div>
                       </div>
                     </td>
@@ -181,7 +209,9 @@ function MembersCard() {
                     <td className="whitespace-nowrap px-4 py-3 text-slate-500">{fmtDate(m.created_at)}</td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end">
-                        <ActionMenu title={m.full_name ?? 'Miembro'} label="Opciones del miembro" items={actionsFor(m)} />
+                        {actionsFor(m).length > 0 && (
+                          <ActionMenu title={m.full_name ?? 'Miembro'} label="Opciones del miembro" items={actionsFor(m)} />
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -198,8 +228,13 @@ function MembersCard() {
                 titleExtra={m.email}
                 tone={m.is_active ? undefined : 'muted'}
                 badges={<>{roleBadge(m)}{statusBadge(m)}</>}
-                actions={<ActionMenu title={m.full_name ?? 'Miembro'} label="Opciones del miembro" items={actionsFor(m)} />}
+                actions={
+                  actionsFor(m).length > 0 ? (
+                    <ActionMenu title={m.full_name ?? 'Miembro'} label="Opciones del miembro" items={actionsFor(m)} />
+                  ) : undefined
+                }
               >
+                {supportReason(m)}
                 <DataFields>
                   <DataField label="Sucursales" wrap>{branchesLabel(m.branch_ids, branchList)}</DataField>
                   <DataField label="Desde">{fmtDate(m.created_at)}</DataField>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
-  ArrowLeft, Ban, Building2, Contact, CreditCard, FileCheck2, Monitor, Package, Play, Receipt,
+  ArrowLeft, Ban, Building2, Contact, CreditCard, FileCheck2, LifeBuoy, LogIn, Monitor, Package, Play, Receipt,
   ShieldCheck, Store, Trash2, UserRound, Users,
 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthProvider'
@@ -16,7 +16,7 @@ import { Avatar, EmptyState, PageLoader } from '@/components/ui/misc'
 import { useToast } from '@/components/ui/toast'
 import { APP_NAME } from '@/lib/constants'
 import { errorMessage } from '@/lib/errors'
-import { fmtDate, fmtDateTime, num } from '@/lib/format'
+import { fmtDate, fmtDateTime, fmtTime, num } from '@/lib/format'
 import { ECF_STATUS, ROLE_LABEL } from '@/lib/labels'
 import {
   useAdminMembers, useAdminRemoveMember, useAdminSetMemberRole, useAdminSetUserBanned,
@@ -25,7 +25,10 @@ import {
 import { useBusinessTypes } from '@/hooks/core'
 import type { AdminMember, MemberRole } from '@/types/db'
 import type { EcfStatus } from '@/types/erp'
+import { AuditLogCard } from './AuditLogCard'
 import { DeleteTenantModal } from './DeleteTenantModal'
+import { EnterSupportModal } from './EnterSupportModal'
+import { TenantNotesCard } from './TenantNotesCard'
 import { SUB_STATUS_LABEL, SUB_STATUS_TONE, SubscriptionEditor } from './SubscriptionEditor'
 
 /**
@@ -34,8 +37,8 @@ import { SUB_STATUS_LABEL, SUB_STATUS_TONE, SubscriptionEditor } from './Subscri
  *
  * PRIVACIDAD POR DISEÑO: solo agregados. Ni ventas, ni clientes, ni productos
  * concretos — `admin_tenant_summary` (0018) devuelve conteos y estados, nada
- * más. Para dar soporte basta con eso, y lo que el panel no puede ver no se
- * puede filtrar.
+ * más. Para ver el negocio por dentro está «Entrar como gestor» (0028): una
+ * membresía temporal, con motivo, que el dueño ve y que queda en la bitácora.
  *
  * El nombre y el plan salen de `useAdminTenants()` —la lista que el panel ya
  * tiene en cache—: la RPC `admin_list_tenants` es la que trae el correo del
@@ -59,6 +62,7 @@ export function AdminTenantDetail() {
   const businessTypes = useBusinessTypes()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [editingSub, setEditingSub] = useState(false)
+  const [entering, setEntering] = useState(false)
   const membersRef = useRef<HTMLDivElement>(null)
 
   const t = (tenants.data ?? []).find((row) => row.id === id) ?? null
@@ -103,6 +107,11 @@ export function AdminTenantDetail() {
           {t?.plan && <Badge tone="brand">{plans[t.plan].name}</Badge>}
           {t?.sub_status && <Badge tone={SUB_STATUS_TONE[t.sub_status]}>{SUB_STATUS_LABEL[t.sub_status]}</Badge>}
           {t?.suspended && <Badge tone="red">Suspendido</Badge>}
+          {t && (
+            <Button size="sm" className="ml-auto" onClick={() => setEntering(true)}>
+              <LogIn className="h-4 w-4" /> Entrar como gestor
+            </Button>
+          )}
         </div>
         <p className="mb-6 break-all text-sm text-slate-500">
           {t
@@ -228,6 +237,9 @@ export function AdminTenantDetail() {
           <MembersCard tenantId={id} tenantName={t?.name ?? 'este negocio'} />
         </div>
 
+        {id && <TenantNotesCard tenantId={id} className="mt-4" />}
+        {id && <AuditLogCard tenantId={id} className="mt-4" />}
+
         {/* ── Zona de peligro ───────────────────────────────────────────────
             Va al final y con marco propio: es la única acción de esta pantalla
             que no tiene vuelta atrás. */}
@@ -249,7 +261,7 @@ export function AdminTenantDetail() {
         </Card>
 
         <p className="mt-6 text-center text-xs text-slate-400">
-          Vista de soporte: solo cifras agregadas, nunca datos del negocio.
+          Esta ficha muestra solo cifras agregadas. Para ver el negocio por dentro, «Entrar como gestor».
         </p>
       </main>
 
@@ -266,6 +278,8 @@ export function AdminTenantDetail() {
           />
         )}
       </Modal>
+
+      <EnterSupportModal tenant={entering && t ? { id: t.id, name: t.name } : null} onClose={() => setEntering(false)} />
 
       <DeleteTenantModal
         tenantId={confirmDelete && id ? id : null}
@@ -378,11 +392,18 @@ function MembersCard({ tenantId, tenantName }: { tenantId?: string; tenantName: 
                 <p className="truncate text-xs text-slate-400">{m.email ?? '—'}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   <Badge tone={m.role === 'owner' ? 'brand' : 'slate'}>{ROLE_LABEL[m.role]}</Badge>
+                  {m.support_until && (
+                    <Badge tone="amber"><LifeBuoy className="h-3 w-3" /> Soporte hasta {fmtTime(m.support_until)}</Badge>
+                  )}
                   {!m.is_active && <Badge tone="amber">Inactivo</Badge>}
                   {m.banned && <Badge tone="red">Acceso bloqueado</Badge>}
                 </div>
               </div>
-              <ActionMenu title={m.full_name ?? m.email ?? 'Usuario'} label="Opciones del usuario" items={actionsFor(m)} />
+              {/* El acceso de soporte no se gestiona como un usuario más: se abre
+                  con «Entrar como gestor» y se cierra al salir o al caducar. */}
+              {!m.support_until && (
+                <ActionMenu title={m.full_name ?? m.email ?? 'Usuario'} label="Opciones del usuario" items={actionsFor(m)} />
+              )}
             </li>
           ))}
         </ul>

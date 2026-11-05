@@ -50,6 +50,16 @@ interface AuthState {
   hasModule: (mod: ModuleCode) => boolean
   /** Cambia la empresa activa (switch_tenant) y recarga todo el contexto. */
   switchTenant: (tenantId: string) => Promise<void>
+  /**
+   * Super-admin dentro de un negocio en modo soporte (0028): hasta cuándo dura
+   * el acceso. null fuera del modo soporte. La caducidad la aplica la base; esto
+   * es para enseñar la cuenta atrás y salir solo al llegar a cero.
+   */
+  supportUntil: string | null
+  /** Entra a un negocio como gestor (admin_enter_tenant) y recarga el contexto. */
+  enterSupport: (tenantId: string, reason: string) => Promise<void>
+  /** Sale del modo soporte (admin_exit_tenant): vuelve a ser super-admin sin negocio. */
+  exitSupport: () => Promise<void>
   refresh: () => Promise<void>
   signOut: () => Promise<void>
 }
@@ -64,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false)
   const [permissions, setPermissions] = useState<string[]>([])
+  const [supportUntil, setSupportUntil] = useState<string | null>(null)
   // Arranca con las constantes de respaldo y se refresca desde `plan_settings`.
   // Así ninguna pantalla se queda sin nombre ni precio mientras carga.
   const [plans, setPlans] = useState<Record<PlanCode, PlanInfo>>(PLANS)
@@ -85,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSubscription(null)
       setIsPlatformAdmin(false)
       setPermissions([])
+      setSupportUntil(null)
       setContextFor(null)
       return
     }
@@ -103,10 +115,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!profError) setProfile(prof as Profile | null)
     setIsPlatformAdmin(Boolean(isAdmin))
 
-    if (prof?.tenant_id) {
+    // Un super-admin con negocio en el perfil está (o estuvo) en modo soporte.
+    // Si el acceso caducó o el dueño lo cortó, la base ya lo dejó fuera, pero el
+    // perfil sigue apuntando al negocio: se cierra aquí para no pintar un
+    // negocio sin permisos y devolverlo al panel.
+    let activeTenantId: string | null = prof?.tenant_id ?? null
+    let until: string | null = null
+    if (isAdmin && activeTenantId) {
+      const { data: member } = await supabase
+        .from('tenant_members')
+        .select('is_active, support_until')
+        .eq('tenant_id', activeTenantId)
+        .eq('user_id', uid)
+        .maybeSingle()
+      if (isStale()) return
+      const expired = !member?.is_active || (member.support_until != null && Date.parse(member.support_until) <= Date.now())
+      if (expired) {
+        // Deja constancia de la salida en la bitácora y limpia el perfil. Si
+        // falla (sin red), no importa: la base ya no le da acceso.
+        await supabase.rpc('admin_exit_tenant')
+        if (isStale()) return
+        activeTenantId = null
+      } else {
+        until = member.support_until
+      }
+    }
+    setSupportUntil(until)
+
+    if (activeTenantId) {
       const [{ data: t }, { data: sub }, { data: perms }] = await Promise.all([
-        supabase.from('tenants').select('*').eq('id', prof.tenant_id).maybeSingle(),
-        supabase.from('subscriptions').select('*').eq('tenant_id', prof.tenant_id).maybeSingle(),
+        supabase.from('tenants').select('*').eq('id', activeTenantId).maybeSingle(),
+        supabase.from('subscriptions').select('*').eq('tenant_id', activeTenantId).maybeSingle(),
         supabase.rpc('my_permissions'),
       ])
       if (isStale()) return
@@ -182,6 +221,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [loadContext],
   )
 
+  const enterSupport = useCallback(
+    async (tenantId: string, reason: string) => {
+      const { error } = await supabase.rpc('admin_enter_tenant', { p_tenant: tenantId, p_reason: reason })
+      if (error) throw error
+      // Lo cacheado es del panel (o de otro negocio): fuera, como en switchTenant.
+      queryClient.clear()
+      const { data } = await supabase.auth.getSession()
+      await loadContext(data.session?.user?.id)
+    },
+    [loadContext],
+  )
+
+  const exitSupport = useCallback(async () => {
+    const { error } = await supabase.rpc('admin_exit_tenant')
+    if (error) throw error
+    queryClient.clear()
+    const { data } = await supabase.auth.getSession()
+    await loadContext(data.session?.user?.id)
+  }, [loadContext])
+
   const signOut = useCallback(async () => {
     // 1) Sube la cola offline mientras el token AÚN es válido (si hay red).
     await flushOfflineQueue(queryClient)
@@ -191,6 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTenant(null)
     setSubscription(null)
     setIsPlatformAdmin(false)
+    setSupportUntil(null)
     setContextFor(null)
     // 3) Limpia SOLO las lecturas (higiene en dispositivos compartidos).
     //    clearOfflineCache CONSERVA la cola de escrituras sin subir: son datos
@@ -233,6 +293,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasModule: (mod: ModuleCode) =>
         tenantModules.has(mod) && (currentPlan.modules == null || currentPlan.modules.includes(mod)),
       switchTenant,
+      supportUntil,
+      enterSupport,
+      exitSupport,
       refresh,
       signOut,
     }
@@ -247,6 +310,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     contextFor,
     permissions,
     switchTenant,
+    supportUntil,
+    enterSupport,
+    exitSupport,
     refresh,
     signOut,
   ])

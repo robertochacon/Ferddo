@@ -14,7 +14,9 @@ import type {
   PlanCode,
   PlanRequestStatus,
   PlatformAdminRow,
+  PlatformAuditRow,
   SubscriptionStatus,
+  TenantAdminNote,
 } from '@/types/db'
 
 // Todo este módulo habla SOLO por RPC `admin_*`. No es una preferencia de
@@ -377,5 +379,73 @@ export function useAdminTenantPurges(limit = 20) {
       if (error) throw error
       return (data ?? []) as AdminTenantPurgeRow[]
     },
+  })
+}
+
+// ── Bitácora del panel (0028) ────────────────────────────────────────────────
+// Estas dos tablas SÍ se leen con `.from()`: su RLS es precisamente «solo
+// super-admin», y no hay nada de `auth.users` que unir (el correo del autor va
+// copiado en la fila de la bitácora; el de las notas sale de la lista de
+// super-admins, que el panel ya tiene).
+
+/** Cuántas líneas trae la bitácora. Las más recientes: es lo que se consulta. */
+export const AUDIT_LIMIT = 500
+
+/** Lo que hicieron los super-admins. Con `tenantId`, solo lo de ese negocio. */
+export function useAdminAuditLog(tenantId?: string) {
+  return useQuery({
+    queryKey: ['admin', 'audit', tenantId ?? 'todas'],
+    queryFn: async (): Promise<PlatformAuditRow[]> => {
+      let q = supabase.from('platform_audit_logs').select('*').order('created_at', { ascending: false }).limit(AUDIT_LIMIT)
+      if (tenantId) q = q.eq('tenant_id', tenantId)
+      const { data, error } = await q
+      if (error) throw error
+      return (data ?? []) as PlatformAuditRow[]
+    },
+  })
+}
+
+// ── Notas internas por negocio (0028) ────────────────────────────────────────
+
+export function useTenantNotes(tenantId: string | undefined) {
+  return useQuery({
+    queryKey: ['admin', 'notes', tenantId],
+    enabled: Boolean(tenantId),
+    queryFn: async (): Promise<TenantAdminNote[]> => {
+      const { data, error } = await supabase
+        .from('tenant_admin_notes')
+        .select('*')
+        .eq('tenant_id', tenantId!)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return (data ?? []) as TenantAdminNote[]
+    },
+  })
+}
+
+export function useAddTenantNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    // `author_id` lo pone la base (default auth.uid()) y la RLS exige que sea
+    // quien escribe: no se manda desde aquí.
+    mutationFn: async (args: { tenant: string; body: string }) => {
+      const { error } = await supabase.from('tenant_admin_notes').insert({ tenant_id: args.tenant, body: args.body.trim() })
+      if (error) throw error
+    },
+    onSuccess: (_d, args) => qc.invalidateQueries({ queryKey: ['admin', 'notes', args.tenant] }),
+  })
+}
+
+export function useDeleteTenantNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: { id: string; tenant: string }) => {
+      // `.select()` para saber si se borró algo: la RLS solo deja borrar las
+      // propias, y sin filas devueltas un DELETE ajeno «funciona» sin hacer nada.
+      const { data, error } = await supabase.from('tenant_admin_notes').delete().eq('id', args.id).select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Solo puedes borrar las notas que escribiste tú.')
+    },
+    onSuccess: (_d, args) => qc.invalidateQueries({ queryKey: ['admin', 'notes', args.tenant] }),
   })
 }

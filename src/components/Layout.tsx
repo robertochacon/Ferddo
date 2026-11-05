@@ -35,6 +35,7 @@ import { cn } from '@/lib/cn'
 import { useAuth } from '@/auth/AuthProvider'
 import { Wordmark, Logo } from '@/components/Logo'
 import { OfflineBar } from '@/components/OfflineBar'
+import { SupportBar } from '@/components/SupportBar'
 import { Avatar } from '@/components/ui/misc'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
@@ -263,6 +264,7 @@ export function Layout() {
           </div>
         </header>
 
+        <SupportBar />
         <OfflineBar />
 
         {/* `pb-24` en móvil: la barra inferior es fija y taparía la última fila. */}
