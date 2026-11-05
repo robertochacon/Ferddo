@@ -11,7 +11,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
 import { Field, Input, Textarea } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { Pagination, paginate } from '@/components/ui/Pagination'
+import { Pagination, paginate, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
 import { Segmented } from '@/components/ui/Segmented'
 import { Select } from '@/components/ui/Select'
 import { StatCard } from '@/components/ui/StatCard'
@@ -28,7 +28,7 @@ import { AttachmentField } from '@/features/purchases/AttachmentField'
 import { parseAmount, PaymentFields, round2, todayIso } from '@/features/receivables/paymentShared'
 
 type Period = 'today' | 'month' | 'prev' | 'range'
-const PAGE_SIZE = 25
+const PAGE_SIZE = DEFAULT_PAGE_SIZE
 const ymd = (d: Date) => format(d, 'yyyy-MM-dd')
 
 function periodRange(period: Period, custom: { from: string; to: string }): { from: string; to: string } {

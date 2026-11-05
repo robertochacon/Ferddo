@@ -6,7 +6,7 @@ import { Field, Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Segmented } from '@/components/ui/Segmented'
 import { Badge } from '@/components/ui/Badge'
-import { Pagination, paginate } from '@/components/ui/Pagination'
+import { Pagination, paginate, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
 import { EmptyState, PageLoader } from '@/components/ui/misc'
 import { useToast } from '@/components/ui/toast'
 import { useAuth } from '@/auth/AuthProvider'
@@ -308,7 +308,7 @@ export function TransferModal({
 
 // ── Conteo físico ───────────────────────────────────────────────────────────
 
-const COUNT_PAGE = 40
+const COUNT_PAGE = DEFAULT_PAGE_SIZE
 
 type CountView = 'all' | 'counted' | 'diff'
 

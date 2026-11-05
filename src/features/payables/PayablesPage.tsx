@@ -89,7 +89,7 @@ function PayablesContent() {
 
   // Se pagina por proveedor (una tarjeta cada uno), no por cuenta: partir un
   // proveedor entre dos páginas escondería parte de lo que se le debe.
-  const groupPage = usePaged(groups, 10)
+  const groupPage = usePaged(groups)
   const total = round2(groups.reduce((s, g) => s + g.balance, 0))
   const overdue = round2(groups.reduce((s, g) => s + g.overdue, 0))
   const all = payables.data ?? []

@@ -13,7 +13,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { Pagination, paginate } from '@/components/ui/Pagination'
+import { Pagination, paginate, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
 import { Segmented } from '@/components/ui/Segmented'
 import { StatCard } from '@/components/ui/StatCard'
 import { Avatar, EmptyState, PageLoader } from '@/components/ui/misc'
@@ -52,8 +52,8 @@ function useBusinessTypeLabels(): Record<string, string> {
   return useMemo(() => Object.fromEntries((data ?? []).map((b) => [b.code, b.label])), [data])
 }
 
-const TENANTS_PAGE_SIZE = 10
-const REQUESTS_PAGE_SIZE = 5
+const TENANTS_PAGE_SIZE = DEFAULT_PAGE_SIZE
+const REQUESTS_PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 type SectionId = 'resumen' | 'negocios' | 'planes' | 'equipo'
 const SECTIONS: { value: SectionId; label: string }[] = [

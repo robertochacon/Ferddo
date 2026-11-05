@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
 import { Field, Input } from '@/components/ui/Input'
-import { Pagination, paginate } from '@/components/ui/Pagination'
+import { Pagination, paginate, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
 import { Select } from '@/components/ui/Select'
 import { StatCard } from '@/components/ui/StatCard'
 import { EmptyState, PageLoader } from '@/components/ui/misc'
@@ -84,7 +84,7 @@ const fold = (s: string) =>
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
 
-const PAGE_SIZE = 25
+const PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 function SalesScreen() {
   const { tenant, can } = useAuth()

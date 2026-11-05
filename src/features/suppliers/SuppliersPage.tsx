@@ -14,7 +14,7 @@ import { Card } from '@/components/ui/Card'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
 import { Field, Input, Textarea } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { Pagination, paginate, usePaged } from '@/components/ui/Pagination'
+import { Pagination, paginate, usePaged, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
 import { Segmented } from '@/components/ui/Segmented'
 import { EmptyState, PageLoader, Spinner } from '@/components/ui/misc'
 import { useToast } from '@/components/ui/toast'
@@ -29,7 +29,7 @@ import type { Supplier } from '@/types/erp'
 import { daysOverdue, round2 } from '@/features/receivables/paymentShared'
 
 type Filter = 'active' | 'balance' | 'inactive'
-const PAGE_SIZE = 25
+const PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 export function SuppliersPage() {
   return (
@@ -424,10 +424,9 @@ function SupplierDetailModal({
 
   const loading = { purchases: purchases.isLoading, payables: payables.isLoading, payments: payments.isLoading }[tab]
   const error = { purchases: purchases.error, payables: payables.error, payments: payments.error }[tab]
-  // 10 por página: es un modal, una lista más larga obliga a desplazarse dentro.
-  const purchasePage = usePaged(purchases.data ?? [], 10)
-  const payablePage = usePaged(payables.data ?? [], 10)
-  const paymentPage = usePaged(payments.data ?? [], 10)
+  const purchasePage = usePaged(purchases.data ?? [])
+  const payablePage = usePaged(payables.data ?? [])
+  const paymentPage = usePaged(payments.data ?? [])
   const pager = { purchases: purchasePage.pager, payables: payablePage.pager, payments: paymentPage.pager }[tab]
   const pagerLabel = { purchases: 'compras', payables: 'cuentas', payments: 'pagos' }[tab]
 

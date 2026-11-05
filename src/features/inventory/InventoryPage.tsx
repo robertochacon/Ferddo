@@ -26,7 +26,7 @@ import { StatCard } from '@/components/ui/StatCard'
 import { Modal } from '@/components/ui/Modal'
 import { ActionMenu, type ActionItem } from '@/components/ui/ActionMenu'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
-import { Pagination, paginate } from '@/components/ui/Pagination'
+import { Pagination, paginate, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
 import { EmptyState, PageLoader } from '@/components/ui/misc'
 import { useAuth } from '@/auth/AuthProvider'
 import { useBranches, useCategories, useProducts, useStockMap } from '@/hooks/core'
@@ -58,9 +58,9 @@ const DOC_KIND: Record<InventoryDocument['kind'], { label: string; tone: 'brand'
   count: { label: 'Conteo físico', tone: 'green' },
 }
 
-const STOCK_PAGE = 50
-const KARDEX_PAGE = 50
-const DOCS_PAGE = 30
+const STOCK_PAGE = DEFAULT_PAGE_SIZE
+const KARDEX_PAGE = DEFAULT_PAGE_SIZE
+const DOCS_PAGE = DEFAULT_PAGE_SIZE
 
 /** Cantidad con signo y color: verde entra, rojo sale. */
 function SignedQty({ qty }: { qty: number }) {

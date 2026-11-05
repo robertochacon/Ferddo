@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Badge } from '@/components/ui/Badge'
-import { Pagination, paginate } from '@/components/ui/Pagination'
+import { Pagination, paginate, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
 import { EmptyState, PageLoader, Spinner } from '@/components/ui/misc'
 import { useToast } from '@/components/ui/toast'
 import { useAuth } from '@/auth/AuthProvider'
@@ -28,7 +28,7 @@ import { cn } from '@/lib/cn'
 import type { Product } from '@/types/erp'
 import { parseDecimal, productHaystack, productLabel } from './catalog'
 
-const PAGE_SIZE = 30
+const PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 type Scope = 'all' | 'listed'
 

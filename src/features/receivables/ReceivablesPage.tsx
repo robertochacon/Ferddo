@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
 import { Input } from '@/components/ui/Input'
-import { Pagination, paginate, usePaged } from '@/components/ui/Pagination'
+import { Pagination, paginate, usePaged, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
 import { StatCard } from '@/components/ui/StatCard'
 import { EmptyState, PageLoader, Spinner } from '@/components/ui/misc'
 import { useCustomers } from '@/hooks/core'
@@ -21,7 +21,7 @@ import type { AgingRow, Receivable } from '@/types/erp'
 import { ReceivePaymentModal } from './ReceivePaymentModal'
 import { daysOverdue, round2 } from './paymentShared'
 
-const PAGE_SIZE = 30
+const PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 const AGING_COLS: { key: keyof Pick<AgingRow, 'current' | 'd1_30' | 'd31_60' | 'd61_90' | 'd90_plus'>; label: string }[] = [
   { key: 'current', label: 'Al día' },
@@ -68,7 +68,7 @@ function ReceivablesContent() {
   const { slice, safePage } = paginate(rows, page, PAGE_SIZE)
   // La fila «Total» de la antigüedad suma TODOS los clientes (agingTotals), no
   // solo los de la página: es el total de la cartera.
-  const agingPage = usePaged(aging.data ?? [], PAGE_SIZE)
+  const agingPage = usePaged(aging.data ?? [])
 
   const total = round2(all.reduce((s, r) => s + balanceOf(r), 0))
   const overdue = round2(all.filter((r) => daysOverdue(r.due_date) > 0).reduce((s, r) => s + balanceOf(r), 0))

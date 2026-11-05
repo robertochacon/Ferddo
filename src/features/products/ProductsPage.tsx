@@ -24,7 +24,7 @@ import { Select } from '@/components/ui/Select'
 import { Badge } from '@/components/ui/Badge'
 import { ActionMenu, type ActionItem } from '@/components/ui/ActionMenu'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
-import { Pagination, paginate } from '@/components/ui/Pagination'
+import { Pagination, paginate, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
 import { EmptyState, PageLoader } from '@/components/ui/misc'
 import { useToast } from '@/components/ui/toast'
 import { useAuth } from '@/auth/AuthProvider'
@@ -52,7 +52,7 @@ import {
   type StockStatus,
 } from './catalog'
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 type KindFilter = 'all' | 'product' | 'service'
 type StatusFilter = 'active' | 'inactive' | 'all'

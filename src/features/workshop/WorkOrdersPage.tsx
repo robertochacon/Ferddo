@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
 import { Field, Input } from '@/components/ui/Input'
-import { Pagination, paginate } from '@/components/ui/Pagination'
+import { Pagination, paginate, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
 import { Segmented } from '@/components/ui/Segmented'
 import { Select } from '@/components/ui/Select'
 import { StatCard } from '@/components/ui/StatCard'
@@ -24,7 +24,7 @@ import { WORK_ORDER_STATUS } from '@/lib/labels'
 import type { WorkOrderStatus } from '@/types/erp'
 import { ACTIVE_STATUSES, assetLabel, isOverdue } from './shared'
 
-const PAGE_SIZE = 25
+const PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 type StatusFilter = WorkOrderStatus | 'all'
 type View = 'list' | 'board'

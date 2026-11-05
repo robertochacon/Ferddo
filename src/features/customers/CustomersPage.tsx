@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { DataField, DataFields, DataList, DataRow } from '@/components/ui/DataList'
 import { Input } from '@/components/ui/Input'
-import { Pagination, paginate } from '@/components/ui/Pagination'
+import { Pagination, paginate, DEFAULT_PAGE_SIZE } from '@/components/ui/Pagination'
 import { Segmented } from '@/components/ui/Segmented'
 import { EmptyState, PageLoader } from '@/components/ui/misc'
 import { useCustomerBalances, useCustomers } from '@/hooks/core'
@@ -27,7 +27,7 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: 'all', label: 'Todos' },
 ]
 
-const PAGE_SIZE = 25
+const PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 const DOC_SHORT: Record<Customer['doc_type'], string> = {
   rnc: 'RNC',

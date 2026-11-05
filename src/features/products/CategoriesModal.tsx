@@ -26,7 +26,7 @@ export function CategoriesModal({ products, onClose }: { products: Product[]; on
   const [newName, setNewName] = useState('')
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Category | null>(null)
-  const paged = usePaged(categories, 10)
+  const paged = usePaged(categories)
 
   const usage = useMemo(() => {
     const m: Record<string, number> = {}
