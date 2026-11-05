@@ -36,7 +36,15 @@ export function OfflineBar() {
       )
     }
     read()
-    return cache.subscribe(read)
+    // Solo los eventos que cambian el estado de una mutación. Los `observer*`
+    // no alteran ningún contador y además llegan DURANTE el render de otra
+    // pantalla: `useMutation` crea su observador en el primer render y este
+    // avisa a la caché al nacer. Reaccionar ahí era un setState de OfflineBar en
+    // mitad del render de, p. ej., Facturación (aviso de React «Cannot update a
+    // component while rendering a different component»).
+    return cache.subscribe((event) => {
+      if (event.type === 'added' || event.type === 'updated' || event.type === 'removed') read()
+    })
   }, [qc])
 
   if (online && queued === 0 && syncing === 0) return null
